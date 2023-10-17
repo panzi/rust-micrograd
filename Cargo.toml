@@ -1,0 +1,16 @@
+[package]
+name = "micrograd"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Rust re-implementation of micrograd just for fun"
+exclude = [
+    ".github",
+    "**/.gitignore",
+]
+
+[dependencies]
+rand = "0.8"
+join-string = "0.2.3"
+
+[lib]
