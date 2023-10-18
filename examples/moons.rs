@@ -1,4 +1,4 @@
-use micrograd::{MLP, Module, Value, Number, Loss, cmp_number, cmp_number_ref};
+use micrograd::{MLP, Module, Value, Number, Loss, cmp_number_ref};
 
 fn main() {
     // Generated in Python with:
@@ -122,7 +122,7 @@ fn main() {
     // 2-layer neural network
     let mut model = MLP::new(2, &[16, 16, 1], &mut rng);
 
-    println!("{}", model);
+    println!("{:#?}", model);
     println!();
     println!("number of parameters: {}", model.count_parameters());
     println!();
@@ -162,7 +162,7 @@ fn main() {
 
     println!("optimizing:");
     for (k, loss) in model.optimize(100, loss) {
-        println!("step {} loss {}, accuracy {}%", k, loss.total, loss.accuracy * 100.0);
+        println!("step {} loss {}, accuracy {}%", k, loss.total.value(), loss.accuracy * 100.0);
     }
 
     // visualize decision boundary

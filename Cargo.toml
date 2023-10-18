@@ -11,6 +11,6 @@ exclude = [
 
 [dependencies]
 rand = "0.8"
-join-string = "0.2.3"
+join-string = "0.3.0"
 
 [lib]

@@ -116,10 +116,11 @@ impl Module for Neuron {
 impl Display for Neuron {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}Neuron([{}])", if self.nonlinear { "ReLu" } else { "Linear" }, self.weights.iter().join(", "))
+        write!(f, "{}Neuron([{:?}])", if self.nonlinear { "ReLu" } else { "Linear" }, self.weights.iter().join(", "))
     }
 }
 
+#[derive(Debug)]
 pub struct Layer {
     neurons: Vec<Neuron>
 }
@@ -195,6 +196,7 @@ impl Display for Layer {
     }
 }
 
+#[derive(Debug)]
 pub struct MLP {
     layers: Vec<Layer>,
     max_size: usize,
