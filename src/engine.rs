@@ -169,67 +169,74 @@ impl Value {
         Value::new_inner(self.value().exp(), Op::Exp(self.clone()))
     }
 
-    #[inline]
-    fn inner_backward(&mut self) {
-        let out = self.inner.borrow_mut();
-        match &out.op {
-            Op::Value => {},
-            Op::Add(lhs, rhs) => {
-                lhs.inner.borrow_mut().grad += out.grad;
-                rhs.inner.borrow_mut().grad += out.grad;
-            },
-            Op::Mul(lhs, rhs) => {
-                let mut lhs_inner = lhs.inner.borrow_mut();
-                let mut rhs_inner = rhs.inner.borrow_mut();
-                lhs_inner.grad += rhs_inner.value * out.grad;
-                rhs_inner.grad += lhs_inner.value * out.grad;
-            },
-            Op::Pow(lhs, rhs) => {
-                lhs.inner.borrow_mut().grad += rhs * lhs.value().powf(rhs - 1.0) * out.grad;
-            },
-            Op::ReLu(arg) => {
-                let value: Number = (out.value > 0.0).into();
-                arg.inner.borrow_mut().grad += value * out.grad;
-            },
-            Op::TanH(arg) => {
-                let mut arg_inner = arg.inner.borrow_mut();
-                let value = 1.0 - (out.value * out.value);
-                arg_inner.grad += value * out.grad;
-            },
-            Op::Exp(arg) => {
-                let mut arg_inner = arg.inner.borrow_mut();
-                arg_inner.grad += out.value * out.grad;
-            },
-        }
-    }
-
     pub fn backward(&mut self) {
-        fn backward(node: &mut Value) {
-            let mut inner = node.inner.borrow_mut();
-            if !inner.visited {
-                inner.visited = true;
-                drop(inner);
-                node.inner_backward();
-                let mut inner = node.inner.borrow_mut();
-                match &mut inner.op {
+        fn backward(out: &mut ValueInner) {
+            if !out.visited {
+                out.visited = true;
+                let out_grad = out.grad;
+                let out_value = out.value;
+                match &mut out.op {
                     Op::Value => {},
-                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
-                        backward(rhs);
-                        backward(lhs);
+                    Op::Add(lhs, rhs) => {
+                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
+                        {
+                        let rhs_inner: &mut ValueInner = &mut rhs.inner.borrow_mut();
+
+                        lhs_inner.grad += out_grad;
+                        rhs_inner.grad += out_grad;
+
+                        backward(rhs_inner);
+                        }
+                        backward(lhs_inner);
                     },
-                    Op::Pow(lhs, _) => {
-                        backward(lhs);
+                    Op::Mul(lhs, rhs) => {
+                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
+                        {
+                        let rhs_inner: &mut ValueInner = &mut rhs.inner.borrow_mut();
+
+                        lhs_inner.grad += rhs_inner.value * out_grad;
+                        rhs_inner.grad += lhs_inner.value * out_grad;
+
+                        backward(rhs_inner);
+                        }
+                        backward(lhs_inner);
                     },
-                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
-                        backward(arg);
+                    Op::Pow(lhs, rhs) => {
+                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
+                        lhs_inner.grad += *rhs * lhs_inner.value.powf(*rhs - 1.0) * out_grad;
+
+                        backward(lhs_inner);
+                    },
+                    Op::ReLu(arg) => {
+                        let value: Number = (out_value > 0.0).into();
+                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
+                        arg_inner.grad += value * out_grad;
+
+                        backward(arg_inner);
+                    },
+                    Op::TanH(arg) => {
+                        let value = 1.0 - (out_value * out_value);
+                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
+                        arg_inner.grad += value * out_grad;
+
+                        backward(arg_inner);
+                    },
+                    Op::Exp(arg) => {
+                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
+                        arg_inner.grad += out_value * out_grad;
+
+                        backward(arg_inner);
                     },
                 }
             }
         }
 
-        self.inner.borrow_mut().grad = 1.0;
+        {
+            let out: &mut ValueInner = &mut self.inner.borrow_mut();
+            out.grad = 1.0;
 
-        backward(self);
+            backward(out);
+        }
 
         fn clear_visited(node: &mut Value) {
             let mut inner = node.inner.borrow_mut();
@@ -443,6 +450,15 @@ where
     }
 }
 
+impl Add<Number> for &Value {
+    type Output = Value;
+
+    #[inline]
+    fn add(self, rhs: Number) -> Self::Output {
+        self.clone() + rhs
+    }
+}
+
 impl AddAssign for Value {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
@@ -486,6 +502,15 @@ where
     #[inline]
     fn mul(self, rhs: B) -> Self::Output {
         self.clone() * rhs.borrow().clone()
+    }
+}
+
+impl Mul<Number> for &Value {
+    type Output = Value;
+
+    #[inline]
+    fn mul(self, rhs: Number) -> Self::Output {
+        self.clone() * rhs
     }
 }
 
@@ -556,6 +581,15 @@ where
     }
 }
 
+impl Sub<Number> for &Value {
+    type Output = Value;
+
+    #[inline]
+    fn sub(self, rhs: Number) -> Self::Output {
+        self.clone() - rhs
+    }
+}
+
 impl SubAssign for Value {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
@@ -602,6 +636,15 @@ where
     #[inline]
     fn div(self, rhs: B) -> Self::Output {
         self.clone() / rhs.borrow().clone()
+    }
+}
+
+impl Div<Number> for &Value {
+    type Output = Value;
+
+    #[inline]
+    fn div(self, rhs: Number) -> Self::Output {
+        self.clone() / rhs
     }
 }
 

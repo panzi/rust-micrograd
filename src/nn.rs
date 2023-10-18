@@ -254,17 +254,17 @@ impl MLP {
     {
         (0..steps).map(move |k| {
             // forward
-            let mut l = loss(self);
+            let mut res = loss(self);
 
             // backward
             self.zero_grad();
-            l.total.backward();
+            res.total.backward();
 
             // update (sgd)
             let learning_rate: Number = 1.0 - 0.9 * k as Number / 100.0;
             self.update(learning_rate);
 
-            (k, l)
+            (k, res)
         })
     }
 }

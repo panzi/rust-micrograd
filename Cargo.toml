@@ -13,4 +13,10 @@ exclude = [
 rand = "0.8"
 join-string = "0.3.0"
 
+[dev-dependencies]
+serde_json = "1.0"
+
 [lib]
+
+[profile.release]
+debug = 1
