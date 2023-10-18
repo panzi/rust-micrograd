@@ -11,6 +11,8 @@ pub enum Op {
     Mul(Value, Value),
     Pow(Value, Number),
     ReLu(Value),
+    TanH(Value),
+    Exp(Value),
 }
 
 impl Op {
@@ -50,6 +52,22 @@ impl Op {
     pub fn is_relu(&self) -> bool {
         match self {
             Op::ReLu(_) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_tanh(&self) -> bool {
+        match self {
+            Op::TanH(_) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_exp(&self) -> bool {
+        match self {
+            Op::Exp(_) => true,
             _ => false,
         }
     }
@@ -114,25 +132,48 @@ impl Value {
     }
 
     #[inline]
+    pub fn tanh(&self) -> Self {
+        let value = (self.value() * 2.0).exp();
+        let value = (value - 1.0) / (value + 1.0);
+        Value::new_inner(value, Op::TanH(self.clone()))
+    }
+
+    #[inline]
+    pub fn exp(&self) -> Self {
+        Value::new_inner(self.value().exp(), Op::Exp(self.clone()))
+    }
+
+    #[inline]
     fn inner_backward(&mut self) {
         let out = self.inner.borrow_mut();
         match &out.op {
             Op::Value => {},
-            Op::Add(ref lhs, ref rhs) => {
+            Op::Add(lhs, rhs) => {
                 lhs.inner.borrow_mut().grad += out.grad;
                 rhs.inner.borrow_mut().grad += out.grad;
             },
-            Op::Mul(ref lhs, ref rhs) => {
-                lhs.inner.borrow_mut().grad += rhs.inner.borrow().value * out.grad;
-                rhs.inner.borrow_mut().grad += lhs.inner.borrow().value * out.grad;
+            Op::Mul(lhs, rhs) => {
+                let mut lhs_inner = lhs.inner.borrow_mut();
+                let mut rhs_inner = rhs.inner.borrow_mut();
+                lhs_inner.grad += rhs_inner.value * out.grad;
+                rhs_inner.grad += lhs_inner.value * out.grad;
             },
-            Op::Pow(ref lhs, rhs) => {
+            Op::Pow(lhs, rhs) => {
                 lhs.inner.borrow_mut().grad += rhs * lhs.value().powf(rhs - 1.0) * out.grad;
             },
-            Op::ReLu(ref child) => {
+            Op::ReLu(arg) => {
                 let value: Number = (out.value > 0.0).into();
-                child.inner.borrow_mut().grad += value * out.grad;
-            }
+                arg.inner.borrow_mut().grad += value * out.grad;
+            },
+            Op::TanH(arg) => {
+                let mut arg_inner = arg.inner.borrow_mut();
+                let value = 1.0 - (out.value * out.value);
+                arg_inner.grad += value * out.grad;
+            },
+            Op::Exp(arg) => {
+                let mut arg_inner = arg.inner.borrow_mut();
+                arg_inner.grad += out.value * out.grad;
+            },
         }
     }
 
@@ -163,9 +204,15 @@ impl Value {
                     Op::Pow(lhs, _) => {
                         build_topo(topo, visited, lhs);
                     },
-                    Op::ReLu(child) => {
-                        build_topo(topo, visited, child);
-                    }
+                    Op::ReLu(arg) => {
+                        build_topo(topo, visited, arg);
+                    },
+                    Op::TanH(arg) => {
+                        build_topo(topo, visited, arg);
+                    },
+                    Op::Exp(arg) => {
+                        build_topo(topo, visited, arg);
+                    },
                 }
                 topo.push(node.clone());
             }
@@ -189,11 +236,13 @@ impl Value {
     pub fn precedence(&self) -> u32 {
         let inner = self.inner.borrow();
         match &inner.op {
-            Op::Value => 4,
+            Op::Value     => 4,
             Op::Add(_, _) => 1,
             Op::Mul(_, _) => 2,
             Op::Pow(_, _) => 3,
-            Op::ReLu(_) => 4,
+            Op::ReLu(_)   => 4,
+            Op::TanH(_)   => 4,
+            Op::Exp(_)    => 4,
         }
     }
 
@@ -237,6 +286,16 @@ impl Value {
     #[inline]
     pub fn is_relu(&self) -> bool {
         self.inner.borrow().op.is_relu()
+    }
+
+    #[inline]
+    pub fn is_tanh(&self) -> bool {
+        self.inner.borrow().op.is_tanh()
+    }
+
+    #[inline]
+    pub fn is_exp(&self) -> bool {
+        self.inner.borrow().op.is_exp()
     }
 }
 
@@ -296,7 +355,9 @@ impl Display for Value {
                     write!(f, "{} ^ {}", lhs, rhs)
                 }
             },
-            Op::ReLu(child) => write!(f, "relu({})", child),
+            Op::ReLu(arg) => write!(f, "relu({})", arg),
+            Op::TanH(arg) => write!(f, "tanh({})", arg),
+            Op::Exp(arg)  => write!(f, "exp({})", arg),
         }
     }
 }
