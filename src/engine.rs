@@ -119,6 +119,12 @@ impl Value {
     }
 
     #[inline]
+    pub fn update(&mut self, learning_rate: Number) {
+        let mut inner = self.inner.borrow_mut();
+        inner.value -= learning_rate * inner.grad;
+    }
+
+    #[inline]
     pub fn relu(&self) -> Self {
         let value = self.value();
         let value = if value < 0.0 { 0.0 } else { value };
@@ -182,54 +188,34 @@ impl Value {
         self.inner.as_ptr() as usize
     }
 
-    pub fn topo_order(&self) -> Vec<Self> {
-        let mut topo = Vec::new();
+    pub fn backward(&mut self) {
         let mut visited: HashSet<usize> = HashSet::new();
 
-        fn build_topo(topo: &mut Vec<Value>, visited: &mut HashSet<usize>, node: &Value) {
+        fn backward(visited: &mut HashSet<usize>, node: &mut Value) {
             let id = node.id();
             if !visited.contains(&id) {
                 visited.insert(id);
-                let inner = node.inner.borrow();
-                match &inner.op {
+                node.inner_backward();
+                let mut inner = node.inner.borrow_mut();
+                match &mut inner.op {
                     Op::Value => {},
-                    Op::Add(lhs, rhs) => {
-                        build_topo(topo, visited, lhs);
-                        build_topo(topo, visited, rhs);
-                    },
-                    Op::Mul(lhs, rhs) => {
-                        build_topo(topo, visited, lhs);
-                        build_topo(topo, visited, rhs);
+                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                        backward(visited, rhs);
+                        backward(visited, lhs);
                     },
                     Op::Pow(lhs, _) => {
-                        build_topo(topo, visited, lhs);
+                        backward(visited, lhs);
                     },
-                    Op::ReLu(arg) => {
-                        build_topo(topo, visited, arg);
-                    },
-                    Op::TanH(arg) => {
-                        build_topo(topo, visited, arg);
-                    },
-                    Op::Exp(arg) => {
-                        build_topo(topo, visited, arg);
+                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                        backward(visited, arg);
                     },
                 }
-                topo.push(node.clone());
             }
         }
 
-        build_topo(&mut topo, &mut visited, self);
+        self.inner.borrow_mut().grad = 1.0;
 
-        topo
-    }
-
-    /// As long as the structure of the network doesn't change you
-    /// can cache the result of `Value::topo_order()` and call
-    /// `backward()` on that instead.
-    #[inline]
-    pub fn backward_slow(&mut self) {
-        let mut topo = self.topo_order();
-        backward(&mut topo);
+        backward(&mut visited, self);
     }
 
     #[inline]
@@ -303,16 +289,6 @@ impl Default for Value {
     #[inline]
     fn default() -> Self {
         Value::new(0.0)
-    }
-}
-
-pub fn backward(topo_order: &mut [Value]) {
-    if let Some(node) = topo_order.last() {
-        node.inner.borrow_mut().grad = 1.0;
-    }
-
-    for node in topo_order.iter_mut().rev() {
-        node.inner_backward();
     }
 }
 

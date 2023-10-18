@@ -3,7 +3,7 @@ use std::{fmt::Display, mem::swap};
 use join_string::Join;
 use rand::{RngCore, Rng};
 
-use crate::Value;
+use crate::{Value, Number};
 
 pub trait Module {
     fn zero_grad(&mut self) {
@@ -19,6 +19,10 @@ pub trait Module {
         self.gather_parameters(&mut params);
         params
     }
+
+    fn update(&mut self, learning_rate: Number);
+
+    fn fold<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
 }
 
 #[derive(Debug)]
@@ -69,6 +73,7 @@ impl Neuron {
 }
 
 impl Module for Neuron {
+    #[inline]
     fn zero_grad(&mut self) {
         for param in &mut self.weights {
             param.zero_grad();
@@ -76,10 +81,25 @@ impl Module for Neuron {
         self.bias.zero_grad();
     }
 
+    #[inline]
     fn gather_parameters(&mut self, params: &mut Vec<Value>) {
         params.reserve(self.weights.len() + 1);
         params.extend_from_slice(&self.weights);
         params.push(self.bias.clone());
+    }
+
+    #[inline]
+    fn update(&mut self, learning_rate: Number) {
+        for param in &mut self.weights {
+            param.update(learning_rate);
+        }
+        self.bias.update(learning_rate);
+    }
+
+    #[inline]
+    fn fold<T, F>(&self, init: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+        let acc = self.weights.iter().fold(init, &mut f);
+        f(acc, &self.bias)
     }
 }
 
@@ -116,18 +136,34 @@ impl Layer {
 }
 
 impl Module for Layer {
+    #[inline]
     fn zero_grad(&mut self) {
         for neuron in &mut self.neurons {
             neuron.zero_grad();
         }
     }
 
+    #[inline]
     fn gather_parameters(&mut self, params: &mut Vec<Value>) {
         for neuron in &mut self.neurons {
             neuron.gather_parameters(params);
         }
     }
 
+    #[inline]
+    fn update(&mut self, learning_rate: Number) {
+        for neuron in &mut self.neurons {
+            neuron.update(learning_rate);
+        }
+    }
+
+    #[inline]
+    fn fold<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+        for neuron in &self.neurons {
+            acc = neuron.fold(acc, &mut f);
+        }
+        acc
+    }
 }
 
 impl Display for Layer {
@@ -171,18 +207,68 @@ impl MLP {
 
         swap(&mut inbuf, output);
     }
+
+    pub fn optimize<'a, L>(&'a mut self, steps: usize, mut loss: L) -> impl std::iter::Iterator + 'a
+    where
+        L: FnMut(&MLP) -> Loss + 'a,
+    {
+        (0..steps).map(move |k| {
+            // forward
+            let mut l = loss(self);
+
+            // backward
+            self.zero_grad();
+            l.total.backward();
+
+            // update (sgd)
+            let learning_rate: Number = 1.0 - 0.9 * k as Number / 100.0;
+            self.update(learning_rate);
+
+            l
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Loss {
+    total: Value,
+    accuracy: Number,
+}
+
+impl Display for Loss {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Loss {{ total: {}, accuracy: {} }}", self.total.value(), self.accuracy)
+    }
 }
 
 impl Module for MLP {
+    #[inline]
     fn zero_grad(&mut self) {
         for layer in &mut self.layers {
             layer.zero_grad();
         }
     }
 
+    #[inline]
     fn gather_parameters(&mut self, params: &mut Vec<Value>) {
         for layer in &mut self.layers {
             layer.gather_parameters(params);
         }
+    }
+
+    #[inline]
+    fn update(&mut self, learning_rate: Number) {
+        for layer in &mut self.layers {
+            layer.update(learning_rate);
+        }
+    }
+
+    #[inline]
+    fn fold<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+        for layer in &self.layers {
+            acc = layer.fold(acc, &mut f);
+        }
+        acc
     }
 }
