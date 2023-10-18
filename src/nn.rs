@@ -22,7 +22,12 @@ pub trait Module {
 
     fn update(&mut self, learning_rate: Number);
 
-    fn fold<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
+    fn fold_paramters<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
+
+    #[inline]
+    fn count_parameters(&self) -> usize {
+        self.fold_paramters(0, |acc, _| { acc + 1 })
+    }
 }
 
 #[derive(Debug)]
@@ -65,7 +70,7 @@ impl Neuron {
     pub fn forward(&self, xs: &[Value]) -> Value {
         let mut res = self.bias.clone();
         for (w, x) in self.weights.iter().zip(xs) {
-            res += w.clone() * x.clone();
+            res += w * x;
         }
 
         if self.nonlinear { res.relu() } else { res }
@@ -97,9 +102,14 @@ impl Module for Neuron {
     }
 
     #[inline]
-    fn fold<T, F>(&self, init: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+    fn fold_paramters<T, F>(&self, init: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
         let acc = self.weights.iter().fold(init, &mut f);
         f(acc, &self.bias)
+    }
+
+    #[inline]
+    fn count_parameters(&self) -> usize {
+        self.weights.len() + 1
     }
 }
 
@@ -128,10 +138,22 @@ impl Layer {
     }
 
     #[inline]
-    pub fn forward(&self, input: &[Value], output: &mut Vec<Value>) {
+    pub fn forward_into(&self, input: &[Value], output: &mut Vec<Value>) {
         for neuron in &self.neurons {
             output.push(neuron.forward(input));
         }
+    }
+
+    #[inline]
+    pub fn forward(&self, input: &[Value]) -> Vec<Value> {
+        let mut output = Vec::with_capacity(self.neurons.len());
+        self.forward_into(input, &mut output);
+        output
+    }
+
+    #[inline]
+    fn count_parameters(&self) -> usize {
+        self.neurons.iter().map(Neuron::count_parameters).sum()
     }
 }
 
@@ -158,9 +180,9 @@ impl Module for Layer {
     }
 
     #[inline]
-    fn fold<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+    fn fold_paramters<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
         for neuron in &self.neurons {
-            acc = neuron.fold(acc, &mut f);
+            acc = neuron.fold_paramters(acc, &mut f);
         }
         acc
     }
@@ -174,7 +196,8 @@ impl Display for Layer {
 }
 
 pub struct MLP {
-    layers: Vec<Layer>
+    layers: Vec<Layer>,
+    max_size: usize,
 }
 
 impl MLP {
@@ -187,7 +210,10 @@ impl MLP {
         let linear_index = outputs.len() - 1;
 
         Self {
-            layers: (0..outputs.len()).map(|index| Layer::new(sz[index], sz[index + 1], index != linear_index, rng)).collect()
+            layers: (0..outputs.len()).map(|index|
+                Layer::new(sz[index], sz[index + 1], index != linear_index, rng)
+            ).collect(),
+            max_size: sz.iter().cloned().fold(0, std::cmp::max),
         }
     }
 
@@ -196,19 +222,31 @@ impl MLP {
         &self.layers
     }
 
-    pub fn forward(&self, input: &[Value], output: &mut Vec<Value>) {
+    #[inline]
+    pub fn max_size(&self) -> usize {
+        self.max_size
+    }
+
+    pub fn forward_into(&self, input: &[Value], output: &mut Vec<Value>) {
         let mut inbuf = Vec::from(input);
 
         for layer in &self.layers {
             output.truncate(0);
-            layer.forward(&inbuf, output);
+            layer.forward_into(&inbuf, output);
             swap(&mut inbuf, output);
         }
 
         swap(&mut inbuf, output);
     }
 
-    pub fn optimize<'a, L>(&'a mut self, steps: usize, mut loss: L) -> impl std::iter::Iterator + 'a
+    #[inline]
+    pub fn forward(&self, input: &[Value]) -> Vec<Value> {
+        let mut output = Vec::with_capacity(self.max_size);
+        self.forward_into(input, &mut output);
+        output
+    }
+
+    pub fn optimize<'a, L>(&'a mut self, steps: usize, mut loss: L) -> impl std::iter::Iterator<Item = (usize, Loss)> + 'a
     where
         L: FnMut(&MLP) -> Loss + 'a,
     {
@@ -224,15 +262,15 @@ impl MLP {
             let learning_rate: Number = 1.0 - 0.9 * k as Number / 100.0;
             self.update(learning_rate);
 
-            l
+            (k, l)
         })
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Loss {
-    total: Value,
-    accuracy: Number,
+    pub total: Value,
+    pub accuracy: Number,
 }
 
 impl Display for Loss {
@@ -265,10 +303,23 @@ impl Module for MLP {
     }
 
     #[inline]
-    fn fold<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
+    fn fold_paramters<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
         for layer in &self.layers {
-            acc = layer.fold(acc, &mut f);
+            acc = layer.fold_paramters(acc, &mut f);
         }
         acc
+    }
+
+    #[inline]
+    fn count_parameters(&self) -> usize {
+        self.layers.iter().map(Layer::count_parameters).sum()
+    }
+}
+
+
+impl Display for MLP {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MLP of [{}]", self.layers.iter().join(", "))
     }
 }

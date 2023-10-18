@@ -1,8 +1,26 @@
+use std::cmp::Ordering;
 use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
 use std::fmt::{Display, Debug};
 use std::{rc::Rc, cell::RefCell, mem::swap};
 
 pub type Number = f64;
+
+#[inline]
+pub fn cmp_number(lhs: Number, rhs: Number) -> Ordering {
+    if lhs < rhs {
+        Ordering::Less
+    } else if lhs > rhs {
+        Ordering::Greater
+    } else {
+        // all NaNs are equal
+        Ordering::Equal
+    }
+}
+
+#[inline]
+pub fn cmp_number_ref(lhs: &Number, rhs: &Number) -> Ordering {
+    cmp_number(*lhs, *rhs)
+}
 
 #[derive(Debug)]
 pub enum Op {
@@ -310,6 +328,52 @@ impl Default for Value {
     }
 }
 
+impl std::iter::Sum for Value {
+    #[inline]
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut sum = Value::new(0.0);
+        for value in iter {
+            sum = sum + value;
+        }
+        sum
+    }
+}
+
+impl From<f32> for Value {
+    #[inline]
+    fn from(value: f32) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl From<f64> for Value {
+    #[inline]
+    fn from(value: f64) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl From<u32> for Value {
+    #[inline]
+    fn from(value: u32) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl From<u64> for Value {
+    #[inline]
+    fn from(value: u64) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl Into<Number> for Value {
+    #[inline]
+    fn into(self) -> Number {
+        self.value()
+    }
+}
+
 impl PartialEq for Value {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
@@ -367,6 +431,18 @@ impl Add<Number> for Value {
     }
 }
 
+impl<B> Add<B> for &Value
+where
+    B: std::borrow::Borrow<Value>,
+{
+    type Output = Value;
+
+    #[inline]
+    fn add(self, rhs: B) -> Self::Output {
+        self.clone() + rhs.borrow().clone()
+    }
+}
+
 impl AddAssign for Value {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
@@ -401,6 +477,18 @@ impl Mul<Number> for Value {
     }
 }
 
+impl<B> Mul<B> for &Value
+where
+    B: std::borrow::Borrow<Value>,
+{
+    type Output = Value;
+
+    #[inline]
+    fn mul(self, rhs: B) -> Self::Output {
+        self.clone() * rhs.borrow().clone()
+    }
+}
+
 impl MulAssign for Value {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
@@ -420,8 +508,18 @@ impl MulAssign<Number> for Value {
 impl Neg for Value {
     type Output = Self;
 
+    #[inline]
     fn neg(self) -> Self::Output {
         self * -1.0
+    }
+}
+
+impl Neg for &Value {
+    type Output = Value;
+
+    #[inline]
+    fn neg(self) -> Self::Output {
+        -self.clone()
     }
 }
 
@@ -443,6 +541,18 @@ impl Sub<Number> for Value {
     #[inline]
     fn sub(self, rhs: Number) -> Self::Output {
         self + -rhs
+    }
+}
+
+impl<B> Sub<B> for &Value
+where
+    B: std::borrow::Borrow<Value>,
+{
+    type Output = Value;
+
+    #[inline]
+    fn sub(self, rhs: B) -> Self::Output {
+        self.clone() - rhs.borrow().clone()
     }
 }
 
@@ -480,6 +590,18 @@ impl Div<Number> for Value {
     #[inline]
     fn div(self, rhs: Number) -> Self::Output {
         self * (1.0 / rhs)
+    }
+}
+
+impl<B> Div<B> for &Value
+where
+    B: std::borrow::Borrow<Value>,
+{
+    type Output = Value;
+
+    #[inline]
+    fn div(self, rhs: B) -> Self::Output {
+        self.clone() / rhs.borrow().clone()
     }
 }
 
