@@ -1,6 +1,6 @@
 use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
 use std::fmt::{Display, Debug};
-use std::{rc::Rc, cell::RefCell, collections::HashSet, hash::Hash, mem::swap};
+use std::{rc::Rc, cell::RefCell, mem::swap};
 
 pub type Number = f64;
 
@@ -78,6 +78,7 @@ struct ValueInner {
     value: Number,
     grad: Number,
     op: Op,
+    visited: bool,
 }
 
 #[repr(transparent)]
@@ -99,6 +100,7 @@ impl Value {
                 value,
                 grad: 0.0,
                 op,
+                visited: false,
             }))
         }
     }
@@ -183,31 +185,25 @@ impl Value {
         }
     }
 
-    #[inline]
-    fn id(&self) -> usize {
-        self.inner.as_ptr() as usize
-    }
-
     pub fn backward(&mut self) {
-        let mut visited: HashSet<usize> = HashSet::new();
-
-        fn backward(visited: &mut HashSet<usize>, node: &mut Value) {
-            let id = node.id();
-            if !visited.contains(&id) {
-                visited.insert(id);
+        fn backward(node: &mut Value) {
+            let mut inner = node.inner.borrow_mut();
+            if !inner.visited {
+                inner.visited = true;
+                drop(inner);
                 node.inner_backward();
                 let mut inner = node.inner.borrow_mut();
                 match &mut inner.op {
                     Op::Value => {},
                     Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
-                        backward(visited, rhs);
-                        backward(visited, lhs);
+                        backward(rhs);
+                        backward(lhs);
                     },
                     Op::Pow(lhs, _) => {
-                        backward(visited, lhs);
+                        backward(lhs);
                     },
                     Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
-                        backward(visited, arg);
+                        backward(arg);
                     },
                 }
             }
@@ -215,7 +211,29 @@ impl Value {
 
         self.inner.borrow_mut().grad = 1.0;
 
-        backward(&mut visited, self);
+        backward(self);
+
+        fn clear_visited(node: &mut Value) {
+            let mut inner = node.inner.borrow_mut();
+            if inner.visited {
+                inner.visited = false;
+                match &mut inner.op {
+                    Op::Value => {},
+                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                        clear_visited(rhs);
+                        clear_visited(lhs);
+                    },
+                    Op::Pow(lhs, _) => {
+                        clear_visited(lhs);
+                    },
+                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                        clear_visited(arg);
+                    },
+                }
+            }
+        }
+
+        clear_visited(self);
     }
 
     #[inline]
@@ -300,13 +318,6 @@ impl PartialEq for Value {
 }
 
 impl Eq for Value {}
-
-impl Hash for Value {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner.as_ptr().hash(state)
-    }
-}
 
 impl Debug for Value {
     #[inline]
