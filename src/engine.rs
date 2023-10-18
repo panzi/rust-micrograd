@@ -1,35 +1,81 @@
-use std::{ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign}, fmt::Display, rc::Rc, cell::RefCell, collections::HashSet, hash::Hash, mem::swap};
+use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
+use std::fmt::{Display, Debug};
+use std::{rc::Rc, cell::RefCell, collections::HashSet, hash::Hash, mem::swap};
+
+pub type Number = f64;
 
 #[derive(Debug)]
 pub enum Op {
     Value,
     Add(Value, Value),
     Mul(Value, Value),
-    Pow(Value, f64),
+    Pow(Value, Number),
     ReLu(Value),
+}
+
+impl Op {
+    #[inline]
+    pub fn is_value(&self) -> bool {
+        match self {
+            Op::Value => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_add(&self) -> bool {
+        match self {
+            Op::Add(_, _) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_mul(&self) -> bool {
+        match self {
+            Op::Mul(_, _) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_pow(&self) -> bool {
+        match self {
+            Op::Pow(_, _) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn is_relu(&self) -> bool {
+        match self {
+            Op::ReLu(_) => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug)]
 struct ValueInner {
-    value: f64,
-    grad: f64,
+    value: Number,
+    grad: Number,
     op: Op,
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Value {
     inner: Rc<RefCell<ValueInner>>
 }
 
 impl Value {
     #[inline]
-    pub fn new(value: f64) -> Self {
+    pub fn new(value: Number) -> Self {
         Value::new_inner(value, Op::Value)
     }
 
     #[inline]
-    fn new_inner(value: f64, op: Op) -> Self {
+    fn new_inner(value: Number, op: Op) -> Self {
         Self {
             inner: Rc::new(RefCell::new(ValueInner {
                 value,
@@ -40,12 +86,12 @@ impl Value {
     }
 
     #[inline]
-    pub fn value(&self) -> f64 {
+    pub fn value(&self) -> Number {
         self.inner.borrow().value
     }
 
     #[inline]
-    pub fn grad(&self) -> f64 {
+    pub fn grad(&self) -> Number {
         self.inner.borrow().grad
     }
 
@@ -63,7 +109,7 @@ impl Value {
     }
 
     #[inline]
-    pub fn pow(&self, rhs: f64) -> Self {
+    pub fn pow(&self, rhs: Number) -> Self {
         Value::new_inner(self.value().powf(rhs), Op::Pow(self.clone(), rhs))
     }
 
@@ -84,7 +130,7 @@ impl Value {
                 lhs.inner.borrow_mut().grad += rhs * lhs.value().powf(rhs - 1.0) * out.grad;
             },
             Op::ReLu(ref child) => {
-                let value: f64 = (out.value > 0.0).into();
+                let value: Number = (out.value > 0.0).into();
                 child.inner.borrow_mut().grad += value * out.grad;
             }
         }
@@ -133,9 +179,64 @@ impl Value {
     /// As long as the structure of the network doesn't change you
     /// can cache the result of `Value::topo_order()` and call
     /// `backward()` on that instead.
+    #[inline]
     pub fn backward_slow(&mut self) {
         let mut topo = self.topo_order();
         backward(&mut topo);
+    }
+
+    #[inline]
+    pub fn precedence(&self) -> u32 {
+        let inner = self.inner.borrow();
+        match &inner.op {
+            Op::Value => 4,
+            Op::Add(_, _) => 1,
+            Op::Mul(_, _) => 2,
+            Op::Pow(_, _) => 3,
+            Op::ReLu(_) => 4,
+        }
+    }
+
+    #[inline]
+    fn fmt_binary(&self, lhs: &Value, op: &str, rhs: &Value, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let precedence = self.precedence();
+        if lhs.precedence() < precedence {
+            write!(f, "({})", lhs)?;
+        } else {
+            write!(f, "{}", lhs)?;
+        }
+        std::fmt::Display::fmt(op, f)?;
+        if rhs.precedence() < precedence {
+            write!(f, "({})", rhs)?;
+        } else {
+            write!(f, "{}", rhs)?;
+        }
+        Ok(())
+    }
+
+    #[inline]
+    pub fn is_value(&self) -> bool {
+        self.inner.borrow().op.is_value()
+    }
+
+    #[inline]
+    pub fn is_add(&self) -> bool {
+        self.inner.borrow().op.is_add()
+    }
+
+    #[inline]
+    pub fn is_mul(&self) -> bool {
+        self.inner.borrow().op.is_mul()
+    }
+
+    #[inline]
+    pub fn is_pow(&self) -> bool {
+        self.inner.borrow().op.is_pow()
+    }
+
+    #[inline]
+    pub fn is_relu(&self) -> bool {
+        self.inner.borrow().op.is_relu()
     }
 }
 
@@ -172,10 +273,31 @@ impl Hash for Value {
     }
 }
 
-impl Display for Value {
+impl Debug for Value {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Value(value={}, grad={})", self.value(), self.grad())
+    }
+}
+
+impl Display for Value {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let inner = self.inner.borrow();
+        match &inner.op {
+            Op::Value => std::fmt::Display::fmt(&self.value(), f),
+            Op::Add(lhs, rhs) => self.fmt_binary(lhs, " + ", rhs, f),
+            Op::Mul(lhs, rhs) => self.fmt_binary(lhs, " * ", rhs, f),
+            Op::Pow(lhs, rhs) => {
+                let precedence = self.precedence();
+                if lhs.precedence() < precedence {
+                    write!(f, "({}) ^ {}", lhs, rhs)
+                } else {
+                    write!(f, "{} ^ {}", lhs, rhs)
+                }
+            },
+            Op::ReLu(child) => write!(f, "relu({})", child),
+        }
     }
 }
 
@@ -188,11 +310,11 @@ impl Add for Value {
     }
 }
 
-impl Add<f64> for Value {
+impl Add<Number> for Value {
     type Output = Value;
 
     #[inline]
-    fn add(self, rhs: f64) -> Self::Output {
+    fn add(self, rhs: Number) -> Self::Output {
         self + Value::new(rhs)
     }
 }
@@ -205,9 +327,9 @@ impl AddAssign for Value {
     }
 }
 
-impl AddAssign<f64> for Value {
+impl AddAssign<Number> for Value {
     #[inline]
-    fn add_assign(&mut self, rhs: f64) {
+    fn add_assign(&mut self, rhs: Number) {
         let mut value = self.clone() + rhs;
         swap(self, &mut value);
     }
@@ -222,11 +344,11 @@ impl Mul for Value {
     }
 }
 
-impl Mul<f64> for Value {
+impl Mul<Number> for Value {
     type Output = Value;
 
     #[inline]
-    fn mul(self, rhs: f64) -> Self::Output {
+    fn mul(self, rhs: Number) -> Self::Output {
         self * Value::new(rhs)
     }
 }
@@ -239,9 +361,9 @@ impl MulAssign for Value {
     }
 }
 
-impl MulAssign<f64> for Value {
+impl MulAssign<Number> for Value {
     #[inline]
-    fn mul_assign(&mut self, rhs: f64) {
+    fn mul_assign(&mut self, rhs: Number) {
         let mut value = self.clone() * rhs;
         swap(self, &mut value);
     }
@@ -260,15 +382,18 @@ impl Sub for Value {
 
     #[inline]
     fn sub(self, rhs: Self) -> Self::Output {
+        if rhs.is_value() {
+            return self + -rhs.value();
+        }
         self + -rhs
     }
 }
 
-impl Sub<f64> for Value {
+impl Sub<Number> for Value {
     type Output = Value;
 
     #[inline]
-    fn sub(self, rhs: f64) -> Self::Output {
+    fn sub(self, rhs: Number) -> Self::Output {
         self + -rhs
     }
 }
@@ -281,9 +406,9 @@ impl SubAssign for Value {
     }
 }
 
-impl SubAssign<f64> for Value {
+impl SubAssign<Number> for Value {
     #[inline]
-    fn sub_assign(&mut self, rhs: f64) {
+    fn sub_assign(&mut self, rhs: Number) {
         let mut value = self.clone() - rhs;
         swap(self, &mut value);
     }
@@ -294,16 +419,19 @@ impl Div for Value {
 
     #[inline]
     fn div(self, rhs: Self) -> Self::Output {
+        if rhs.is_value() {
+            return self * (1.0 / rhs.value())
+        }
         self * rhs.pow(-1.0)
     }
 }
 
-impl Div<f64> for Value {
+impl Div<Number> for Value {
     type Output = Value;
 
     #[inline]
-    fn div(self, rhs: f64) -> Self::Output {
-        self * rhs.powf(-1.0)
+    fn div(self, rhs: Number) -> Self::Output {
+        self * (1.0 / rhs)
     }
 }
 
@@ -315,9 +443,9 @@ impl DivAssign for Value {
     }
 }
 
-impl DivAssign<f64> for Value {
+impl DivAssign<Number> for Value {
     #[inline]
-    fn div_assign(&mut self, rhs: f64) {
+    fn div_assign(&mut self, rhs: Number) {
         let mut value = self.clone() / rhs;
         swap(self, &mut value);
     }
