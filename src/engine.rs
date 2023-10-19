@@ -22,7 +22,7 @@ pub fn cmp_number_ref(lhs: &Number, rhs: &Number) -> Ordering {
     cmp_number(*lhs, *rhs)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Op {
     Value,
     Add(Value, Value),
@@ -170,72 +170,72 @@ impl Value {
     }
 
     pub fn backward(&mut self) {
-        fn backward(out: &mut ValueInner) {
+        fn backward(node: &Value) {
+            let mut out = node.inner.borrow_mut();
             if !out.visited {
                 out.visited = true;
                 let out_grad = out.grad;
                 let out_value = out.value;
-                match &mut out.op {
+                match out.op.clone() {
                     Op::Value => {},
                     Op::Add(lhs, rhs) => {
-                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
-                        {
-                        let rhs_inner: &mut ValueInner = &mut rhs.inner.borrow_mut();
+                        lhs.inner.borrow_mut().grad += out_grad;
+                        rhs.inner.borrow_mut().grad += out_grad;
 
-                        lhs_inner.grad += out_grad;
-                        rhs_inner.grad += out_grad;
-
-                        backward(rhs_inner);
-                        }
-                        backward(lhs_inner);
+                        drop(out);
+                        backward(&rhs);
+                        backward(&lhs);
                     },
                     Op::Mul(lhs, rhs) => {
-                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
                         {
-                        let rhs_inner: &mut ValueInner = &mut rhs.inner.borrow_mut();
+                            let lhs_value = lhs.inner.borrow().value;
+                            let rhs_value = rhs.inner.borrow().value;
 
-                        lhs_inner.grad += rhs_inner.value * out_grad;
-                        rhs_inner.grad += lhs_inner.value * out_grad;
-
-                        backward(rhs_inner);
+                            lhs.inner.borrow_mut().grad += rhs_value * out_grad;
+                            rhs.inner.borrow_mut().grad += lhs_value * out_grad;
                         }
-                        backward(lhs_inner);
+
+                        drop(out);
+                        backward(&rhs);
+                        backward(&lhs);
                     },
                     Op::Pow(lhs, rhs) => {
-                        let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
-                        lhs_inner.grad += *rhs * lhs_inner.value.powf(*rhs - 1.0) * out_grad;
+                        {
+                            let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
+                            lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
+                        }
 
-                        backward(lhs_inner);
+                        drop(out);
+                        backward(&lhs);
                     },
                     Op::ReLu(arg) => {
                         let value: Number = (out_value > 0.0).into();
-                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
-                        arg_inner.grad += value * out_grad;
+                        arg.inner.borrow_mut().grad += value * out_grad;
 
-                        backward(arg_inner);
+                        drop(out);
+                        backward(&arg);
                     },
                     Op::TanH(arg) => {
                         let value = 1.0 - (out_value * out_value);
-                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
-                        arg_inner.grad += value * out_grad;
+                        arg.inner.borrow_mut().grad += value * out_grad;
 
-                        backward(arg_inner);
+                        drop(out);
+                        backward(&arg);
                     },
                     Op::Exp(arg) => {
-                        let arg_inner: &mut ValueInner = &mut arg.inner.borrow_mut();
-                        arg_inner.grad += out_value * out_grad;
+                        arg.inner.borrow_mut().grad += out_value * out_grad;
 
-                        backward(arg_inner);
+                        drop(out);
+                        backward(&arg);
                     },
                 }
             }
         }
 
         {
-            let out: &mut ValueInner = &mut self.inner.borrow_mut();
-            out.grad = 1.0;
+            self.inner.borrow_mut().grad = 1.0;
 
-            backward(out);
+            backward(self);
         }
 
         fn clear_visited(node: &mut Value) {
