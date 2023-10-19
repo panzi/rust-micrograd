@@ -176,13 +176,17 @@ impl Value {
                 out.visited = true;
                 let out_grad = out.grad;
                 let out_value = out.value;
-                match out.op.clone() {
+                let op = out.op.clone();
+
+                // make sure the borrow ends before anything below is borrowed
+                drop(out);
+
+                match op {
                     Op::Value => {},
                     Op::Add(lhs, rhs) => {
                         lhs.inner.borrow_mut().grad += out_grad;
                         rhs.inner.borrow_mut().grad += out_grad;
 
-                        drop(out);
                         backward(&rhs);
                         backward(&lhs);
                     },
@@ -195,7 +199,6 @@ impl Value {
                             rhs.inner.borrow_mut().grad += lhs_value * out_grad;
                         }
 
-                        drop(out);
                         backward(&rhs);
                         backward(&lhs);
                     },
@@ -205,27 +208,23 @@ impl Value {
                             lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
                         }
 
-                        drop(out);
                         backward(&lhs);
                     },
                     Op::ReLu(arg) => {
                         let value: Number = (out_value > 0.0).into();
                         arg.inner.borrow_mut().grad += value * out_grad;
 
-                        drop(out);
                         backward(&arg);
                     },
                     Op::TanH(arg) => {
                         let value = 1.0 - (out_value * out_value);
                         arg.inner.borrow_mut().grad += value * out_grad;
 
-                        drop(out);
                         backward(&arg);
                     },
                     Op::Exp(arg) => {
                         arg.inner.borrow_mut().grad += out_value * out_grad;
 
-                        drop(out);
                         backward(&arg);
                     },
                 }
@@ -238,11 +237,11 @@ impl Value {
             backward(self);
         }
 
-        fn clear_visited(node: &mut Value) {
+        fn clear_visited(node: &Value) {
             let mut inner = node.inner.borrow_mut();
             if inner.visited {
                 inner.visited = false;
-                match &mut inner.op {
+                match &inner.op {
                     Op::Value => {},
                     Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
                         clear_visited(rhs);
