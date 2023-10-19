@@ -411,6 +411,18 @@ impl Value {
     pub fn is_exp(&self) -> bool {
         self.inner.borrow().op.is_exp()
     }
+
+    /// This is meant for changing inputs.
+    /// After changing inputs with this calling `Value::refresh()` on `Loss::total` is required.
+    /// Don't mess with this otherwise.
+    #[inline]
+    pub fn assign(&mut self, value: Number) {
+        let inner: &mut ValueInner = &mut self.inner.borrow_mut();
+        inner.value = value;
+        inner.grad  = 0.0;
+        inner.op    = Op::Value;
+        inner.k     = 0; // not sure if needed, probably not
+    }
 }
 
 impl Default for Value {
