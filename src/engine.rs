@@ -164,10 +164,14 @@ impl Value {
         match &mut inner.op {
             Op::Value => {},
             Op::Add(lhs, rhs) => {
-                inner.value = lhs.refresh(k) + rhs.refresh(k);
+                let rhs_value = rhs.refresh(k);
+                let lhs_value = lhs.refresh(k);
+                inner.value = lhs_value + rhs_value;
             },
             Op::Mul(lhs, rhs) => {
-                inner.value = lhs.refresh(k) * rhs.refresh(k);
+                let rhs_value = rhs.refresh(k);
+                let lhs_value = lhs.refresh(k);
+                inner.value = lhs_value * rhs_value;
             },
             Op::Pow(lhs, rhs) => {
                 inner.value = lhs.refresh(k).powf(*rhs);

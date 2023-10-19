@@ -12,9 +12,9 @@ pub trait Module {
         }
     }
 
-    fn gather_parameters(&mut self, params: &mut Vec<Value>);
+    fn gather_parameters(&self, params: &mut Vec<Value>);
 
-    fn parameters(&mut self) -> Vec<Value> {
+    fn parameters(&self) -> Vec<Value> {
         let mut params = Vec::new();
         self.gather_parameters(&mut params);
         params
@@ -87,7 +87,7 @@ impl Module for Neuron {
     }
 
     #[inline]
-    fn gather_parameters(&mut self, params: &mut Vec<Value>) {
+    fn gather_parameters(&self, params: &mut Vec<Value>) {
         params.reserve(self.weights.len() + 1);
         params.extend_from_slice(&self.weights);
         params.push(self.bias.clone());
@@ -167,8 +167,8 @@ impl Module for Layer {
     }
 
     #[inline]
-    fn gather_parameters(&mut self, params: &mut Vec<Value>) {
-        for neuron in &mut self.neurons {
+    fn gather_parameters(&self, params: &mut Vec<Value>) {
+        for neuron in &self.neurons {
             neuron.gather_parameters(params);
         }
     }
@@ -262,11 +262,11 @@ impl MLP {
             let mut res = loss(self, k);
 
             // backward
-            self.zero_grad();
+            res.total.zero_grad();
             res.total.backward();
 
             // update (sgd)
-            let learning_rate: Number = 1.0 - 0.9 * k as Number / 100.0;
+            let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;
             self.update(learning_rate);
 
             (k, res)
@@ -296,8 +296,8 @@ impl Module for MLP {
     }
 
     #[inline]
-    fn gather_parameters(&mut self, params: &mut Vec<Value>) {
-        for layer in &mut self.layers {
+    fn gather_parameters(&self, params: &mut Vec<Value>) {
+        for layer in &self.layers {
             layer.gather_parameters(params);
         }
     }
