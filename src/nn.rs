@@ -140,9 +140,10 @@ impl Layer {
 
     #[inline]
     pub fn forward_into(&self, input: &[Value], output: &mut Vec<Value>) {
-        for neuron in &self.neurons {
-            output.push(neuron.forward(input));
-        }
+        output.clear();
+        output.extend(self.neurons.iter().map(
+            |neuron| neuron.forward(input)
+        ));
     }
 
     #[inline]
@@ -233,7 +234,6 @@ impl MLP {
         let mut inbuf = Vec::from(input);
 
         for layer in &self.layers {
-            output.clear();
             layer.forward_into(&inbuf, output);
             swap(&mut inbuf, output);
         }
