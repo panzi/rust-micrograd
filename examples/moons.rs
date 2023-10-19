@@ -35,16 +35,16 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     println!();
 
     let mut buf = Vec::with_capacity(model.max_size());
+    let mut scores: Vec<Value> = Vec::with_capacity(X.len());
 
     let loss = |model: &MLP| {
         // forward the model to get scores
-        let scores: Vec<_> = X.iter().map(
-            |xrow| {
-                let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
-                model.forward_into(&input, &mut buf);
-                buf.first().unwrap().clone()
-            }
-        ).collect();
+        scores.clear();
+        for xrow in &X {
+            let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
+            model.forward_into(&input, &mut buf);
+            scores.push(buf.first().unwrap().clone());
+        }
 
         // sum "max-margin" loss
         let losses: Vec<_> = y.iter().cloned().zip(scores.iter()).map(
@@ -61,7 +61,7 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
         let total = data_loss + reg_loss;
 
         // also get accuracy
-        let sum_accuracy: usize = y.iter().cloned().zip(scores).map(
+        let sum_accuracy: usize = y.iter().cloned().zip(scores.iter()).map(
             |(yi, scorei)| ((yi > 0.0) == (scorei.value() > 0.0)) as usize
         ).sum();
 
