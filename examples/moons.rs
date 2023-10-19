@@ -34,9 +34,10 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     println!("number of parameters: {}", model.count_parameters());
     println!();
 
+    let mut buf = Vec::with_capacity(model.max_size());
+
     let loss = |model: &MLP| {
         // forward the model to get scores
-        let mut buf = Vec::with_capacity(model.max_size());
         let scores: Vec<_> = X.iter().map(
             |xrow| {
                 let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
