@@ -248,6 +248,11 @@ impl MLP {
         output
     }
 
+    #[inline]
+    pub fn forward_unwrap(&self, input: &[Value]) -> Value {
+        self.forward(input).first().unwrap().clone()
+    }
+
     pub fn optimize<'a, L>(&'a mut self, steps: usize, mut loss: L) -> impl std::iter::Iterator<Item = (usize, Loss)> + 'a
     where
         L: FnMut(&MLP) -> Loss + 'a,

@@ -35,13 +35,14 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     println!();
 
     let loss = |model: &MLP| {
-        let inputs: Vec<Vec<_>> = X.iter().map(
-            |xrow| xrow.iter().cloned().map(Value::new).collect()
-        ).collect();
-
         // forward the model to get scores
-        let scores: Vec<_> = inputs.iter().map(
-            |input| model.forward(input).first().unwrap().clone()
+        let mut buf = Vec::with_capacity(model.max_size());
+        let scores: Vec<_> = X.iter().map(
+            |xrow| {
+                let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
+                model.forward_into(&input, &mut buf);
+                buf.first().unwrap().clone()
+            }
         ).collect();
 
         // sum "max-margin" loss
@@ -52,14 +53,16 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
 
         // L2 regularization
         let alpha: Number = 1e-4;
-        let reg_loss = model.fold_paramters(Value::new(0.0), |acc, value| acc + (value * value)) * alpha;
+        let reg_loss = model.fold_paramters(
+            Value::new(0.0),
+            |acc, value| acc + (value * value)
+        ) * alpha;
         let total = data_loss + reg_loss;
 
         // also get accuracy
-        let mut sum_accuracy: usize = 0;
-        for (yi, scorei) in y.iter().cloned().zip(scores) {
-            sum_accuracy += ((yi > 0.0) == (scorei.value() > 0.0)) as usize;
-        }
+        let sum_accuracy: usize = y.iter().cloned().zip(scores).map(
+            |(yi, scorei)| ((yi > 0.0) == (scorei.value() > 0.0)) as usize
+        ).sum();
 
         let accuracy = sum_accuracy as Number / y.len() as Number;
 
