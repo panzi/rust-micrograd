@@ -345,6 +345,17 @@ impl std::iter::Sum for Value {
     }
 }
 
+impl std::iter::Product for Value {
+    #[inline]
+    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
+        let mut sum = Value::new(1.0);
+        for value in iter {
+            sum = sum * value;
+        }
+        sum
+    }
+}
+
 impl From<f32> for Value {
     #[inline]
     fn from(value: f32) -> Self {
@@ -369,6 +380,20 @@ impl From<u32> for Value {
 impl From<u64> for Value {
     #[inline]
     fn from(value: u64) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl From<i32> for Value {
+    #[inline]
+    fn from(value: i32) -> Self {
+        Value::new(value as Number)
+    }
+}
+
+impl From<i64> for Value {
+    #[inline]
+    fn from(value: i64) -> Self {
         Value::new(value as Number)
     }
 }
