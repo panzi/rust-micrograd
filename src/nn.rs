@@ -233,7 +233,7 @@ impl MLP {
         let mut inbuf = Vec::from(input);
 
         for layer in &self.layers {
-            output.truncate(0);
+            output.clear();
             layer.forward_into(&inbuf, output);
             swap(&mut inbuf, output);
         }
