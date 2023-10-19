@@ -153,7 +153,7 @@ impl Value {
     }
 
     /// For re-using an expression tree and just updating the values.
-    /// XXX: Doesn't work.
+    /// It also sets grad to zero.
     pub fn refresh(&mut self, k: usize) -> Number {
         let inner: &mut ValueInner = &mut self.inner.borrow_mut();
 
@@ -189,6 +189,7 @@ impl Value {
             },
         }
         inner.k = k;
+        inner.grad = 0.0;
 
         inner.value
     }
@@ -503,7 +504,7 @@ impl Debug for Value {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let inner: &ValueInner = &self.inner.borrow();
-        write!(f, "Value(value={}, grad={})", inner.value, inner.grad)
+        write!(f, "Value(value={}, grad={}, k={})", inner.value, inner.grad, inner.k)
     }
 }
 

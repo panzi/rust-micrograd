@@ -262,8 +262,8 @@ impl MLP {
             let mut res = loss(self, k);
 
             // backward
-            self.zero_grad();
-            // println!("\n\n{:#?}\n\n", self);
+            // the loss function needs to apply zero_grad() or do it as a side effect of e.g. refresh()
+            // self.zero_grad();
             res.total.backward();
 
             // update (sgd)

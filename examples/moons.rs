@@ -37,40 +37,32 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     let mut buf = Vec::with_capacity(model.max_size());
     let mut scores = Vec::with_capacity(X.len());
 
-    let loss = |model: &MLP, _k: usize| {
-        // XXX: I thought moving the section beween BEGIN and END out of the
-        //      loss function and instead making total mut, calling
-        //      total.refresh(k) inside of the loss function (and cloning
-        //      total on return) should work and save a *lot* of allocations,
-        //      but it doesn't. Gives completely broken results. Why?
+    // forward the model to get scores
+    scores.clear();
+    for xrow in &X {
+        let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
+        model.forward_into(&input, &mut buf);
+        scores.push(buf.first().unwrap().clone());
+    }
 
-        // ============================== BEGIN ==============================
+    // sum "max-margin" loss
+    let loss_sum: Value = y.iter().cloned().zip(scores.iter()).map(
+        |(yi, scorei)| (scorei * -yi + 1.0).relu()
+    ).sum();
+    let data_loss = loss_sum / y.len() as Number;
 
-        // forward the model to get scores
-        scores.clear();
-        for xrow in &X {
-            let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
-            model.forward_into(&input, &mut buf);
-            scores.push(buf.first().unwrap().clone());
-        }
+    // L2 regularization
+    let alpha: Number = 1e-4;
+    let reg_loss = model.fold_paramters(
+        Value::new(0.0),
+        |acc, value| acc + (value * value)
+    ) * alpha;
+    let mut total = data_loss + reg_loss;
 
-        // sum "max-margin" loss
-        let loss_sum: Value = y.iter().cloned().zip(scores.iter()).map(
-            |(yi, scorei)| (scorei * -yi + 1.0).relu()
-        ).sum();
-        let data_loss = loss_sum / y.len() as Number;
-
-        // L2 regularization
-        let alpha: Number = 1e-4;
-        let reg_loss = model.fold_paramters(
-            Value::new(0.0),
-            |acc, value| acc + (value * value)
-        ) * alpha;
-        let total = data_loss + reg_loss;
-
-        // =============================== END ===============================
-
-        // total.refresh(k);
+    let loss = |_model: &MLP, k: usize| {
+        // Re-use the existing expression tree and just recalculate the values in-place.
+        // This also zeroes the grad field.
+        total.refresh(k);
 
         // also get accuracy
         let sum_accuracy: usize = y.iter().cloned().zip(scores.iter()).map(
@@ -85,7 +77,7 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
         // println!();
 
         Loss {
-            total,
+            total: total.clone(),
             accuracy,
         }
     };
