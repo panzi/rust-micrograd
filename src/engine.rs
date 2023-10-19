@@ -140,7 +140,7 @@ impl Value {
 
     #[inline]
     pub fn update(&mut self, learning_rate: Number) {
-        let mut inner = self.inner.borrow_mut();
+        let inner: &mut ValueInner = &mut self.inner.borrow_mut();
         inner.value -= learning_rate * inner.grad;
     }
 
@@ -171,7 +171,8 @@ impl Value {
 
     pub fn backward(&mut self) {
         fn backward(node: &Value) {
-            let mut out = node.inner.borrow_mut();
+            let mut out_ref = node.inner.borrow_mut();
+            let out: &mut ValueInner = &mut out_ref;
             if !out.visited {
                 out.visited = true;
                 let out_grad = out.grad;
@@ -179,7 +180,7 @@ impl Value {
                 let op = out.op.clone();
 
                 // make sure the borrow ends before anything below is borrowed
-                drop(out);
+                drop(out_ref);
 
                 match op {
                     Op::Value => {},
@@ -238,7 +239,7 @@ impl Value {
         }
 
         fn clear_visited(node: &Value) {
-            let mut inner = node.inner.borrow_mut();
+            let inner: &mut ValueInner = &mut node.inner.borrow_mut();
             if inner.visited {
                 inner.visited = false;
                 match &inner.op {
