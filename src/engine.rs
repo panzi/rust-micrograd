@@ -586,7 +586,7 @@ impl Sub<Number> for &Value {
 
     #[inline]
     fn sub(self, rhs: Number) -> Self::Output {
-        self.clone() - rhs
+        self.clone() + -rhs
     }
 }
 

@@ -35,7 +35,9 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     println!();
 
     let loss = |model: &MLP| {
-        let inputs: Vec<Vec<_>> = X.iter().map(|xrow| xrow.iter().cloned().map(Value::new).collect()).collect();
+        let inputs: Vec<Vec<_>> = X.iter().map(
+            |xrow| xrow.iter().cloned().map(Value::new).collect()
+        ).collect();
 
         // forward the model to get scores
         let scores: Vec<_> = inputs.iter().map(
@@ -44,9 +46,9 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
 
         // sum "max-margin" loss
         let losses: Vec<_> = y.iter().cloned().zip(scores.iter()).map(
-            |(yi, scorei)| (scorei.clone() * -yi + 1.0).relu()
+            |(yi, scorei)| (scorei * -yi + 1.0).relu()
         ).collect();
-        let data_loss = losses.iter().cloned().sum::<Value>() * (1.0 / losses.len() as Number);
+        let data_loss = losses.iter().cloned().sum::<Value>() / losses.len() as Number;
 
         // L2 regularization
         let alpha: Number = 1e-4;
@@ -79,19 +81,22 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     let y_min = X.iter().map(|row| row[1]).min_by(cmp_number_ref).unwrap_or(0.0);
     let y_max = X.iter().map(|row| row[1]).max_by(cmp_number_ref).unwrap_or(0.0);
 
-    let mut x = x_min;
     let mut xmesh = Vec::new();
-    while x < x_max {
+
+    {
         let mut y = y_min;
         while y < y_max {
-            xmesh.push([x, y]);
+            let mut x = x_min;
+            while x < x_max {
+                xmesh.push([x, y]);
+                x += h;
+            }
             y += h;
         }
-        x += h;
     }
 
     let x_len = ((x_max - x_min) / h).ceil() as usize;
-    let y_len = ((y_max - y_min) / h).ceil() as usize;
+    // let y_len = ((y_max - y_min) / h).ceil() as usize;
 
     let (xx, yy) = meshgrid(
         &arange(x_min, x_max, h),
@@ -131,6 +136,7 @@ plt.show()
     Command::new("python").args(["-c", &pycode]).spawn().expect("spawning python failed");
 }
 
+#[inline]
 fn arange(start: Number, end: Number, step: Number) -> Vec<Number> {
     let mut xs = Vec::new();
     let mut x = start;
@@ -143,6 +149,7 @@ fn arange(start: Number, end: Number, step: Number) -> Vec<Number> {
     xs
 }
 
+#[inline]
 fn meshgrid(xs: &[Number], ys: &[Number]) -> (Vec<Vec<Number>>, Vec<Vec<Number>>) {
     (
         (0..ys.len()).map(|_| Vec::from(xs)).collect(),
