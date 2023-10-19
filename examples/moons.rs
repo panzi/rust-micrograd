@@ -35,8 +35,7 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     println!();
 
     let mut buf = Vec::with_capacity(model.max_size());
-    let mut scores: Vec<Value> = Vec::with_capacity(X.len());
-    // let mut losses: Vec<Value> = Vec::with_capacity(y.len());
+    let mut scores = Vec::with_capacity(X.len());
 
     let loss = |model: &MLP| {
         // forward the model to get scores
@@ -48,15 +47,10 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
         }
 
         // sum "max-margin" loss
-        let losses: Vec<_> = y.iter().cloned().zip(scores.iter()).map(
+        let loss_sum: Value = y.iter().cloned().zip(scores.iter()).map(
             |(yi, scorei)| (scorei * -yi + 1.0).relu()
-        ).collect();
-        // for some reason this REDUCES performance:
-        // losses.clear();
-        // for (yi, scorei) in y.iter().cloned().zip(scores.iter()) {
-        //     losses.push((scorei * -yi + 1.0).relu());
-        // }
-        let data_loss = losses.iter().cloned().sum::<Value>() / losses.len() as Number;
+        ).sum();
+        let data_loss = loss_sum / y.len().min(scores.len()) as Number;
 
         // L2 regularization
         let alpha: Number = 1e-4;
