@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
+use std::mem::replace;
 use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
 use std::fmt::{Display, Debug};
-use std::{rc::Rc, cell::RefCell, mem::swap};
+use std::{rc::Rc, cell::RefCell};
 
 pub type Number = f64;
 
@@ -97,6 +98,7 @@ struct ValueInner {
     grad: Number,
     op: Op,
     visited: bool,
+    k: usize,
 }
 
 #[repr(transparent)]
@@ -119,6 +121,7 @@ impl Value {
                 grad: 0.0,
                 op,
                 visited: false,
+                k: 0,
             }))
         }
     }
@@ -134,6 +137,11 @@ impl Value {
     }
 
     #[inline]
+    pub fn k(&self) -> usize {
+        self.inner.borrow().k
+    }
+
+    #[inline]
     pub fn zero_grad(&mut self) {
         self.inner.borrow_mut().grad = 0.0;
     }
@@ -142,6 +150,43 @@ impl Value {
     pub fn update(&mut self, learning_rate: Number) {
         let inner: &mut ValueInner = &mut self.inner.borrow_mut();
         inner.value -= learning_rate * inner.grad;
+    }
+
+    /// For re-using an expression tree and just updating the values.
+    /// XXX: Doesn't work.
+    pub fn refresh(&mut self, k: usize) -> Number {
+        let inner: &mut ValueInner = &mut self.inner.borrow_mut();
+
+        if inner.k >= k {
+            return inner.value;
+        }
+
+        match &mut inner.op {
+            Op::Value => {},
+            Op::Add(lhs, rhs) => {
+                inner.value = lhs.refresh(k) + rhs.refresh(k);
+            },
+            Op::Mul(lhs, rhs) => {
+                inner.value = lhs.refresh(k) * rhs.refresh(k);
+            },
+            Op::Pow(lhs, rhs) => {
+                inner.value = lhs.refresh(k).powf(*rhs);
+            },
+            Op::ReLu(arg) => {
+                let value = arg.refresh(k);
+                inner.value = if value < 0.0 { 0.0 } else { value };
+            },
+            Op::TanH(arg) => {
+                let value = (arg.refresh(k) * 2.0).exp();
+                inner.value = (value - 1.0) / (value + 1.0);
+            },
+            Op::Exp(arg) => {
+                inner.value = arg.refresh(k).exp();
+            },
+        }
+        inner.k = k;
+
+        inner.value
     }
 
     #[inline]
@@ -238,27 +283,62 @@ impl Value {
             backward(self);
         }
 
-        fn clear_visited(node: &Value) {
+        self.clear_visited();
+    }
+
+    pub fn count_nodes(&self) -> usize {
+        fn count_nodes(node: &Value) -> usize {
             let inner: &mut ValueInner = &mut node.inner.borrow_mut();
+
             if inner.visited {
-                inner.visited = false;
-                match &inner.op {
-                    Op::Value => {},
-                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
-                        clear_visited(rhs);
-                        clear_visited(lhs);
-                    },
-                    Op::Pow(lhs, _) => {
-                        clear_visited(lhs);
-                    },
-                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
-                        clear_visited(arg);
-                    },
+                return 0;
+            }
+
+            let mut count = 1;
+
+            inner.visited = true;
+
+            match &inner.op {
+                Op::Value => {},
+                Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                    count += count_nodes(lhs) + count_nodes(rhs);
+                },
+                Op::Pow(lhs, _) => {
+                    count += count_nodes(lhs);
+                },
+                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                    count += count_nodes(arg);
                 }
             }
+
+            count
         }
 
-        clear_visited(self);
+        let count = count_nodes(self);
+
+        self.clear_visited();
+
+        count
+    }
+
+    fn clear_visited(&self) {
+        let inner: &mut ValueInner = &mut self.inner.borrow_mut();
+        if inner.visited {
+            inner.visited = false;
+            match &inner.op {
+                Op::Value => {},
+                Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                    rhs.clear_visited();
+                    lhs.clear_visited();
+                },
+                Op::Pow(lhs, _) => {
+                    lhs.clear_visited();
+                },
+                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                    arg.clear_visited();
+                },
+            }
+        }
     }
 
     #[inline]
@@ -488,16 +568,14 @@ impl Add<Number> for &Value {
 impl AddAssign for Value {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
-        let mut value = self.clone() + rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() + rhs);
     }
 }
 
 impl AddAssign<Number> for Value {
     #[inline]
     fn add_assign(&mut self, rhs: Number) {
-        let mut value = self.clone() + rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() + rhs);
     }
 }
 
@@ -543,16 +621,14 @@ impl Mul<Number> for &Value {
 impl MulAssign for Value {
     #[inline]
     fn mul_assign(&mut self, rhs: Self) {
-        let mut value = self.clone() * rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() * rhs);
     }
 }
 
 impl MulAssign<Number> for Value {
     #[inline]
     fn mul_assign(&mut self, rhs: Number) {
-        let mut value = self.clone() * rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() * rhs);
     }
 }
 
@@ -619,16 +695,14 @@ impl Sub<Number> for &Value {
 impl SubAssign for Value {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
-        let mut value = self.clone() - rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() - rhs);
     }
 }
 
 impl SubAssign<Number> for Value {
     #[inline]
     fn sub_assign(&mut self, rhs: Number) {
-        let mut value = self.clone() - rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() - rhs);
     }
 }
 
@@ -677,15 +751,13 @@ impl Div<Number> for &Value {
 impl DivAssign for Value {
     #[inline]
     fn div_assign(&mut self, rhs: Self) {
-        let mut value = self.clone() / rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() / rhs);
     }
 }
 
 impl DivAssign<Number> for Value {
     #[inline]
     fn div_assign(&mut self, rhs: Number) {
-        let mut value = self.clone() / rhs;
-        swap(self, &mut value);
+        let _ = replace(self, self.clone() / rhs);
     }
 }

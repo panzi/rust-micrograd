@@ -38,6 +38,14 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     let mut scores = Vec::with_capacity(X.len());
 
     let loss = |model: &MLP, _k: usize| {
+        // XXX: I thought moving the section beween BEGIN and END out of the
+        //      loss function and instead making total mut, calling
+        //      total.refresh(k) inside of the loss function (and cloning
+        //      total on return) should work and save a *lot* of allocations,
+        //      but it doesn't. Gives completely broken results. Why?
+
+        // ============================== BEGIN ==============================
+
         // forward the model to get scores
         scores.clear();
         for xrow in &X {
@@ -50,7 +58,7 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
         let loss_sum: Value = y.iter().cloned().zip(scores.iter()).map(
             |(yi, scorei)| (scorei * -yi + 1.0).relu()
         ).sum();
-        let data_loss = loss_sum / y.len().min(scores.len()) as Number;
+        let data_loss = loss_sum / y.len() as Number;
 
         // L2 regularization
         let alpha: Number = 1e-4;
@@ -59,6 +67,10 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
             |acc, value| acc + (value * value)
         ) * alpha;
         let total = data_loss + reg_loss;
+
+        // =============================== END ===============================
+
+        // total.refresh(k);
 
         // also get accuracy
         let sum_accuracy: usize = y.iter().cloned().zip(scores.iter()).map(
@@ -72,6 +84,8 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
             accuracy,
         }
     };
+
+    // println!("node count: {}", total.count_nodes());
 
     println!("optimizing:");
     for (k, loss) in model.optimize(100, loss) {
