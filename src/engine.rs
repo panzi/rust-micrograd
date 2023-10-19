@@ -418,7 +418,8 @@ impl Eq for Value {}
 impl Debug for Value {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Value(value={}, grad={})", self.value(), self.grad())
+        let inner: &ValueInner = &self.inner.borrow();
+        write!(f, "Value(value={}, grad={})", inner.value, inner.grad)
     }
 }
 
