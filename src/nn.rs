@@ -262,7 +262,8 @@ impl MLP {
             let mut res = loss(self, k);
 
             // backward
-            res.total.zero_grad();
+            self.zero_grad();
+            // println!("\n\n{:#?}\n\n", self);
             res.total.backward();
 
             // update (sgd)
