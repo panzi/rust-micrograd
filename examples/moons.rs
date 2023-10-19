@@ -37,7 +37,7 @@ json.dump([X.tolist(), y.tolist()], sys.stdout)
     let mut buf = Vec::with_capacity(model.max_size());
     let mut scores = Vec::with_capacity(X.len());
 
-    let loss = |model: &MLP| {
+    let loss = |model: &MLP, _k: usize| {
         // forward the model to get scores
         scores.clear();
         for xrow in &X {

@@ -255,11 +255,11 @@ impl MLP {
 
     pub fn optimize<'a, L>(&'a mut self, steps: usize, mut loss: L) -> impl std::iter::Iterator<Item = (usize, Loss)> + 'a
     where
-        L: FnMut(&MLP) -> Loss + 'a,
+        L: FnMut(&MLP, usize) -> Loss + 'a,
     {
         (0..steps).map(move |k| {
             // forward
-            let mut res = loss(self);
+            let mut res = loss(self, k);
 
             // backward
             self.zero_grad();
