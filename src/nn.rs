@@ -273,6 +273,27 @@ impl MLP {
             (k, res)
         })
     }
+
+    pub fn optimize_batched<'a, L>(&'a mut self, steps: usize, batch_size: usize, mut loss: L) -> impl std::iter::Iterator<Item = (usize, Loss)> + 'a
+    where
+        L: FnMut(&MLP, usize, usize) -> Loss + 'a,
+    {
+        (0..steps).map(move |k| {
+            // forward
+            let mut res = loss(self, k, batch_size);
+
+            // backward
+            // the loss function needs to apply zero_grad() or do it as a side effect of e.g. refresh()
+            // self.zero_grad();
+            res.total.backward();
+
+            // update (sgd)
+            let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;
+            self.update(learning_rate);
+
+            (k, res)
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
