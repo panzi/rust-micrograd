@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::hash::Hash;
 use std::mem::replace;
 use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
 use std::fmt::{Display, Debug};
@@ -72,18 +73,18 @@ impl Op {
 }
 
 #[derive(Debug)]
-struct ValueInner {
-    value: Number,
-    grad: Number,
-    op: Op,
-    visited: bool,
-    k: usize,
+pub(crate) struct ValueInner {
+    pub(crate) value: Number,
+    pub(crate) grad: Number,
+    pub(crate) op: Op,
+    pub(crate) visited: bool,
+    pub(crate) k: usize,
 }
 
 #[repr(transparent)]
 #[derive(Clone)]
 pub struct Value {
-    inner: Rc<RefCell<ValueInner>>
+    pub(crate) inner: Rc<RefCell<ValueInner>>
 }
 
 impl Value {
@@ -305,7 +306,7 @@ impl Value {
         count
     }
 
-    fn clear_visited(&self) {
+    pub(crate) fn clear_visited(&self) {
         let inner: &mut ValueInner = &mut self.inner.borrow_mut();
         if inner.visited {
             inner.visited = false;
@@ -479,6 +480,13 @@ impl From<Value> for Number {
     #[inline]
     fn from(value: Value) -> Self {
         value.value()
+    }
+}
+
+impl Hash for Value {
+    #[inline]
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.inner.as_ptr().hash(state)
     }
 }
 
