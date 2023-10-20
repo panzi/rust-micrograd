@@ -67,7 +67,7 @@ impl Neuron {
         self.nonlinear
     }
 
-    pub fn forward(&self, xs: &[Value]) -> Value {
+    pub fn forward(&mut self, xs: &[Value]) -> Value {
         let mut res = self.bias.clone();
         for (w, x) in self.weights.iter().zip(xs) {
             res += w * x;
@@ -139,15 +139,15 @@ impl Layer {
     }
 
     #[inline]
-    pub fn forward_into(&self, input: &[Value], output: &mut Vec<Value>) {
+    pub fn forward_into(&mut self, input: &[Value], output: &mut Vec<Value>) {
         output.clear();
-        output.extend(self.neurons.iter().map(
+        output.extend(self.neurons.iter_mut().map(
             |neuron| neuron.forward(input)
         ));
     }
 
     #[inline]
-    pub fn forward(&self, input: &[Value]) -> Vec<Value> {
+    pub fn forward(&mut self, input: &[Value]) -> Vec<Value> {
         let mut output = Vec::with_capacity(self.neurons.len());
         self.forward_into(input, &mut output);
         output
@@ -230,10 +230,10 @@ impl MLP {
         self.max_size
     }
 
-    pub fn forward_into(&self, input: &[Value], output: &mut Vec<Value>) {
+    pub fn forward_into(&mut self, input: &[Value], output: &mut Vec<Value>) {
         let mut inbuf = Vec::from(input);
 
-        for layer in &self.layers {
+        for layer in self.layers.iter_mut() {
             layer.forward_into(&inbuf, output);
             swap(&mut inbuf, output);
         }
@@ -242,14 +242,14 @@ impl MLP {
     }
 
     #[inline]
-    pub fn forward(&self, input: &[Value]) -> Vec<Value> {
+    pub fn forward(&mut self, input: &[Value]) -> Vec<Value> {
         let mut output = Vec::with_capacity(self.max_size);
         self.forward_into(input, &mut output);
         output
     }
 
     #[inline]
-    pub fn forward_unwrap(&self, input: &[Value]) -> Value {
+    pub fn forward_unwrap(&mut self, input: &[Value]) -> Value {
         self.forward(input).first().unwrap().clone()
     }
 

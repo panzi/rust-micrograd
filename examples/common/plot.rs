@@ -5,7 +5,8 @@ use micrograd::{cmp_number_ref, Value, Number, MLP};
 use super::{meshgrid, arange};
 
 #[allow(non_snake_case)]
-pub fn plot_moons(X: &[Vec<Number>], y: &[Number], model: &MLP) {
+#[allow(dead_code)]
+pub fn plot_moons(X: &[Vec<Number>], y: &[Number], model: &mut MLP) {
     // visualize decision boundary
     let h = 0.25;
     let x_min = X.iter().map(|row| row[0]).min_by(cmp_number_ref).unwrap_or(0.0);
@@ -31,7 +32,7 @@ pub fn plot_moons(X: &[Vec<Number>], y: &[Number], model: &MLP) {
     // let y_len = ((y_max - y_min) / h).ceil() as usize;
 
     let (xx, yy) = meshgrid(
-        &&arange(x_min, x_max, h),
+        &arange(x_min, x_max, h),
         &arange(y_min, y_max, h),
     );
 
