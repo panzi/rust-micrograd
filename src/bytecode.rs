@@ -57,8 +57,9 @@ impl<'a> Codegen<'a> {
                     if !self.heap_map.contains_key(node) {
                         let heap_ptr = self.heap_map.len();
                         self.heap_map.insert(node, heap_ptr);
-                        if heap_ptr >= self.program.heap.len() {
-                            self.program.heap.resize(heap_ptr + 1, 0.0);
+                        // space for value and grad
+                        if heap_ptr + 1 >= self.program.heap.len() {
+                            self.program.heap.resize(heap_ptr + 2, 0.0);
                         }
                         self.program.heap[heap_ptr] = inner.value;
                     };
