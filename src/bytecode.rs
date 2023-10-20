@@ -74,7 +74,7 @@ impl<'a> Codegen<'a> {
         heap_ptr
     }
 
-    fn forward(&mut self, node: &'a Value) {
+    fn forward(&mut self, node: &Value) {
         let inner: &mut ValueInner = &mut node.inner.borrow_mut();
 
         if !inner.visited {
@@ -88,6 +88,9 @@ impl<'a> Codegen<'a> {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
 
+                    self.forward(lhs);
+                    self.forward(rhs);
+
                     self.program.code.push(Bytecode::Add);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
@@ -96,6 +99,9 @@ impl<'a> Codegen<'a> {
                 Op::Mul(lhs, rhs) => {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
+
+                    self.forward(lhs);
+                    self.forward(rhs);
 
                     self.program.code.push(Bytecode::Mul);
                     self.program.ptr_args.push(lhs_ptr);
@@ -106,6 +112,8 @@ impl<'a> Codegen<'a> {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.get_const_ptr(*rhs);
 
+                    self.forward(lhs);
+
                     self.program.code.push(Bytecode::Pow);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
@@ -114,6 +122,8 @@ impl<'a> Codegen<'a> {
                 Op::ReLu(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
+                    self.forward(arg);
+
                     self.program.code.push(Bytecode::ReLu);
                     self.program.ptr_args.push(arg_ptr);
                     self.program.ptr_args.push(out_ptr);
@@ -121,12 +131,16 @@ impl<'a> Codegen<'a> {
                 Op::TanH(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
+                    self.forward(arg);
+
                     self.program.code.push(Bytecode::TanH);
                     self.program.ptr_args.push(arg_ptr);
                     self.program.ptr_args.push(out_ptr);
                 },
                 Op::Exp(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
+
+                    self.forward(arg);
 
                     self.program.code.push(Bytecode::Exp);
                     self.program.ptr_args.push(arg_ptr);
@@ -136,7 +150,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn backward(&mut self, node: &'a Value) {
+    fn backward(&mut self, node: &Value) {
         let inner: &mut ValueInner = &mut node.inner.borrow_mut();
 
         if !inner.visited {
@@ -151,6 +165,9 @@ impl<'a> Codegen<'a> {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
 
+                    self.backward(rhs);
+                    self.backward(lhs);
+
                     self.program.code.push(Bytecode::GradAdd);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
@@ -159,6 +176,9 @@ impl<'a> Codegen<'a> {
                 Op::Mul(lhs, rhs) => {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
+
+                    self.backward(rhs);
+                    self.backward(lhs);
 
                     self.program.code.push(Bytecode::GradMul);
                     self.program.ptr_args.push(lhs_ptr);
@@ -169,6 +189,8 @@ impl<'a> Codegen<'a> {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.get_const_ptr(*rhs);
 
+                    self.backward(lhs);
+
                     self.program.code.push(Bytecode::GradPow);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
@@ -177,6 +199,8 @@ impl<'a> Codegen<'a> {
                 Op::ReLu(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
+                    self.backward(arg);
+
                     self.program.code.push(Bytecode::GradReLu);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
@@ -184,12 +208,16 @@ impl<'a> Codegen<'a> {
                 Op::TanH(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
+                    self.backward(arg);
+
                     self.program.code.push(Bytecode::GradTanH);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
                 },
                 Op::Exp(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
+
+                    self.backward(arg);
 
                     self.program.code.push(Bytecode::GradExp);
                     self.program.ptr_args.push(arg_ptr + 1);
@@ -255,6 +283,8 @@ impl Program {
         total_loss.clear_visited();
 
         codegen.update(parameters);
+
+        //println!("code:\n{:#?}", program.code);
 
         program
     }
