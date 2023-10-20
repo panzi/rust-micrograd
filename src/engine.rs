@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::hash::Hash;
 use std::mem::replace;
 use std::ops::{Add, Mul, Neg, Sub, Div, AddAssign, MulAssign, SubAssign, DivAssign};
 use std::fmt::{Display, Debug};
@@ -326,6 +325,10 @@ impl Value {
         }
     }
 
+    pub(crate) fn id(&self) -> usize {
+        self.inner.as_ptr() as usize
+    }
+
     #[inline]
     pub fn precedence(&self) -> u32 {
         let inner = self.inner.borrow();
@@ -480,13 +483,6 @@ impl From<Value> for Number {
     #[inline]
     fn from(value: Value) -> Self {
         value.value()
-    }
-}
-
-impl Hash for Value {
-    #[inline]
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.inner.as_ptr().hash(state)
     }
 }
 
