@@ -177,134 +177,163 @@ impl Program {
         let ptr_args = &self.ptr_args[..];
         let mut ptr_arg_index = 0;
 
+        // risky unsafe business for speed
+        #[cfg(not(debug_assertions))]
+        macro_rules! ptr_args {
+            ($($expr:tt)*) => {
+                *unsafe { ptr_args.get_unchecked($($expr)*) }
+            };
+        }
+
+        #[cfg(not(debug_assertions))]
+        macro_rules! heap {
+            ($($expr:tt)*) => {
+                *unsafe { heap.get_unchecked_mut($($expr)*) }
+            };
+        }
+
+        #[cfg(debug_assertions)]
+        macro_rules! ptr_args {
+            ($($expr:tt)*) => {
+                ptr_args[$($expr)*]
+            };
+        }
+
+        #[cfg(debug_assertions)]
+        macro_rules! heap {
+            ($($expr:tt)*) => {
+                heap[$($expr)*]
+            };
+        }
+
         for op in self.code.iter().cloned() {
             match op {
                 Bytecode::Add => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let res_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    heap[res_ptr] = heap[lhs_ptr] + heap[rhs_ptr];
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    heap![res_ptr] = heap![lhs_ptr] + heap![rhs_ptr];
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::Mul => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let res_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    heap[res_ptr] = heap[lhs_ptr] * heap[rhs_ptr];
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    heap![res_ptr] = heap![lhs_ptr] * heap![rhs_ptr];
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::Pow => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let res_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    heap[res_ptr] = heap[lhs_ptr].powf(heap[rhs_ptr]);
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    heap![res_ptr] = heap![lhs_ptr].powf(heap![rhs_ptr]);
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::ReLu => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let res_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let value = heap[arg_ptr];
-                    heap[res_ptr] = if value < 0.0 { 0.0 } else { value };
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    let value = heap![arg_ptr];
+                    heap![res_ptr] = if value < 0.0 { 0.0 } else { value };
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::TanH => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let res_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let value = (heap[arg_ptr] * 2.0).exp();
-                    heap[res_ptr] = (value - 1.0) / (value + 1.0);
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    let value = (heap![arg_ptr] * 2.0).exp();
+                    heap![res_ptr] = (value - 1.0) / (value + 1.0);
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::Exp => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let res_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    heap[res_ptr] = heap[arg_ptr].exp();
-                    heap[res_ptr + 1] = 0.0; // zero grad
+                    heap![res_ptr] = heap![arg_ptr].exp();
+                    heap![res_ptr + 1] = 0.0; // zero grad
                 },
 
                 Bytecode::GradAdd => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let out_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    let out_grad = heap[out_ptr];
-                    heap[lhs_ptr] += out_grad;
-                    heap[rhs_ptr] += out_grad;
+                    let out_grad = heap![out_ptr];
+                    heap![lhs_ptr] += out_grad;
+                    heap![rhs_ptr] += out_grad;
                 },
                 Bytecode::GradMul => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let out_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    let out_grad = heap[out_ptr];
-                    let lhs_value = heap[lhs_ptr];
-                    let rhs_value = heap[rhs_ptr];
-                    heap[lhs_ptr + 1] += rhs_value * out_grad;
-                    heap[rhs_ptr + 1] += lhs_value * out_grad;
+                    let out_grad  = heap![out_ptr];
+                    let lhs_value = heap![lhs_ptr];
+                    let rhs_value = heap![rhs_ptr];
+                    heap![lhs_ptr + 1] += rhs_value * out_grad;
+                    heap![rhs_ptr + 1] += lhs_value * out_grad;
                 },
                 Bytecode::GradPow => {
-                    let lhs_ptr = ptr_args[ptr_arg_index];
-                    let rhs_ptr = ptr_args[ptr_arg_index + 1];
-                    let out_ptr = ptr_args[ptr_arg_index + 2];
+                    let lhs_ptr = ptr_args![ptr_arg_index];
+                    let rhs_ptr = ptr_args![ptr_arg_index + 1];
+                    let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
 
-                    let out_grad = heap[out_ptr];
-                    let lhs_value = heap[lhs_ptr];
-                    let rhs_value = heap[rhs_ptr];
-                    heap[lhs_ptr + 1] += rhs_value * lhs_value.powf(rhs_value - 1.0) * out_grad;
+                    let out_grad  = heap![out_ptr];
+                    let lhs_value = heap![lhs_ptr];
+                    let rhs_value = heap![rhs_ptr];
+                    heap![lhs_ptr + 1] += rhs_value * lhs_value.powf(rhs_value - 1.0) * out_grad;
                 },
                 Bytecode::GradReLu => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let out_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let out_value = heap[out_ptr];
-                    let out_grad = heap[out_ptr + 1];
+                    let out_value = heap![out_ptr];
+                    let out_grad  = heap![out_ptr + 1];
                     let value: Number = (out_value > 0.0).into();
-                    heap[arg_ptr] += value * out_grad;
+                    heap![arg_ptr] += value * out_grad;
                 },
                 Bytecode::GradTanH => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let out_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let out_value = heap[out_ptr];
-                    let out_grad = heap[out_ptr + 1];
+                    let out_value = heap![out_ptr];
+                    let out_grad  = heap![out_ptr + 1];
                     let value: Number = 1.0 * (out_value * out_value);
-                    heap[arg_ptr] += value * out_grad;
+                    heap![arg_ptr] += value * out_grad;
                 },
                 Bytecode::GradExp => {
-                    let arg_ptr = ptr_args[ptr_arg_index];
-                    let out_ptr = ptr_args[ptr_arg_index + 1];
+                    let arg_ptr = ptr_args![ptr_arg_index];
+                    let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let out_value = heap[out_ptr];
-                    let out_grad = heap[out_ptr + 1];
-                    heap[arg_ptr] += out_value * out_grad;
+                    let out_value = heap![out_ptr];
+                    let out_grad  = heap![out_ptr + 1];
+                    heap![arg_ptr] += out_value * out_grad;
                 },
 
                 Bytecode::Update => {
-                    let heap_ptr = ptr_args[ptr_arg_index];
+                    let heap_ptr = ptr_args![ptr_arg_index];
                     ptr_arg_index += 1;
-                    heap[heap_ptr] -= learning_rate * heap[heap_ptr + 1];
+                    heap![heap_ptr] -= learning_rate * heap![heap_ptr + 1];
                 },
             }
         }
 
-        heap[self.total_loss_ptr]
+        heap![self.total_loss_ptr]
     }
 
     pub fn total_loss(&self) -> Number {
