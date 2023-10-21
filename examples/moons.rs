@@ -74,5 +74,5 @@ fn main() {
     }
 
     // visualize decision boundary
-    plot_moons(X, &y, &mut model);
+    plot_moons(X, y, &mut model);
 }
