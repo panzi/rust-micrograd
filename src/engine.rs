@@ -37,58 +37,37 @@ pub enum Op {
 impl Op {
     #[inline]
     pub fn is_value(&self) -> bool {
-        match self {
-            Op::Value => true,
-            _ => false,
-        }
+        matches!(self, Op::Value)
     }
 
     #[inline]
     pub fn is_add(&self) -> bool {
-        match self {
-            Op::Add(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Op::Add(_, _))
     }
 
     #[inline]
     pub fn is_mul(&self) -> bool {
-        match self {
-            Op::Mul(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Op::Mul(_, _))
     }
 
     #[inline]
     pub fn is_pow(&self) -> bool {
-        match self {
-            Op::Pow(_, _) => true,
-            _ => false,
-        }
+        matches!(self, Op::Pow(_, _))
     }
 
     #[inline]
     pub fn is_relu(&self) -> bool {
-        match self {
-            Op::ReLu(_) => true,
-            _ => false,
-        }
+        matches!(self, Op::ReLu(_))
     }
 
     #[inline]
     pub fn is_tanh(&self) -> bool {
-        match self {
-            Op::TanH(_) => true,
-            _ => false,
-        }
+        matches!(self, Op::TanH(_))
     }
 
     #[inline]
     pub fn is_exp(&self) -> bool {
-        match self {
-            Op::Exp(_) => true,
-            _ => false,
-        }
+        matches!(self, Op::Exp(_))
     }
 }
 
@@ -437,7 +416,7 @@ impl std::iter::Sum for Value {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut sum = Value::new(0.0);
         for value in iter {
-            sum = sum + value;
+            sum += value;
         }
         sum
     }
@@ -448,7 +427,7 @@ impl std::iter::Product for Value {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
         let mut sum = Value::new(1.0);
         for value in iter {
-            sum = sum * value;
+            sum *= value;
         }
         sum
     }
@@ -496,10 +475,10 @@ impl From<i64> for Value {
     }
 }
 
-impl Into<Number> for Value {
+impl From<Value> for Number {
     #[inline]
-    fn into(self) -> Number {
-        self.value()
+    fn from(value: Value) -> Self {
+        value.value()
     }
 }
 
