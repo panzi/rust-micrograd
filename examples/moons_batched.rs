@@ -1,17 +1,21 @@
 use micrograd::{MLP, Module, Value, Number, Loss};
+use rand::SeedableRng;
 
 mod common;
 
+use crate::common::DEFAULT_X;
+use crate::common::DEFAULT_Y;
 use crate::common::plot_moons;
-use crate::common::make_moons;
 
 use rand::seq::SliceRandom;
 
 #[allow(non_snake_case)]
 fn main() {
-    let (X, y) = make_moons(100, 0.1);
+    let X = DEFAULT_X;
+    let y = DEFAULT_Y;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
+
     // 2-layer neural network
     let mut model = MLP::new(2, &[16, 16, 1], &mut rng);
     let batch_size = 50;

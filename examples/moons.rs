@@ -1,15 +1,19 @@
 use micrograd::{MLP, Module, Value, Number, Loss};
+use rand::SeedableRng;
 
 mod common;
 
+use crate::common::DEFAULT_X;
+use crate::common::DEFAULT_Y;
 use crate::common::plot_moons;
-use crate::common::make_moons;
 
 #[allow(non_snake_case)]
 fn main() {
-    let (X, y) = make_moons(100, 0.1);
+    let X = DEFAULT_X;
+    let y = DEFAULT_Y;
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
+
     // 2-layer neural network
     let mut model = MLP::new(2, &[16, 16, 1], &mut rng);
 
@@ -22,7 +26,7 @@ fn main() {
     let mut scores = Vec::with_capacity(X.len());
 
     // forward the model to get scores
-    for xrow in &X {
+    for xrow in X {
         let input: Vec<_> = xrow.iter().cloned().map(Value::new).collect();
         model.forward_into(&input, &mut buf);
         scores.push(buf.first().unwrap().clone());
@@ -70,5 +74,5 @@ fn main() {
     }
 
     // visualize decision boundary
-    plot_moons(&X, &y, &mut model);
+    plot_moons(X, &y, &mut model);
 }
