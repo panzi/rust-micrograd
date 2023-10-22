@@ -23,7 +23,9 @@ pub enum Bytecode {
     GradTanH,      // arg grad ptr, out value ptr
     GradExp,       // arg grad ptr, out value ptr
 
-    Update,        // value ptr
+    // Update,        // value ptr
+
+    SetTargetGrad,
 }
 
 #[derive(Debug)]
@@ -168,74 +170,74 @@ impl<'a> Codegen<'a> {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
 
-                    self.backward(rhs);
-                    self.backward(lhs);
-
                     self.program.code.push(Bytecode::GradAdd);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
                     self.program.ptr_args.push(out_grad_ptr);
+
+                    self.backward(rhs);
+                    self.backward(lhs);
                 },
                 Op::Mul(lhs, rhs) => {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
 
-                    self.backward(rhs);
-                    self.backward(lhs);
-
                     self.program.code.push(Bytecode::GradMul);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
                     self.program.ptr_args.push(out_grad_ptr);
+
+                    self.backward(rhs);
+                    self.backward(lhs);
                 },
                 Op::Pow(lhs, rhs) => {
                     let lhs_ptr = self.program.get_heap_ptr(lhs);
                     let rhs_ptr = self.get_const_ptr(*rhs);
 
-                    self.backward(lhs);
-
                     self.program.code.push(Bytecode::GradPow);
                     self.program.ptr_args.push(lhs_ptr);
                     self.program.ptr_args.push(rhs_ptr);
                     self.program.ptr_args.push(out_grad_ptr);
+
+                    self.backward(lhs);
                 },
                 Op::ReLu(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
-                    self.backward(arg);
-
                     self.program.code.push(Bytecode::GradReLu);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
+
+                    self.backward(arg);
                 },
                 Op::TanH(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
-                    self.backward(arg);
-
                     self.program.code.push(Bytecode::GradTanH);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
+
+                    self.backward(arg);
                 },
                 Op::Exp(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
-                    self.backward(arg);
-
                     self.program.code.push(Bytecode::GradExp);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
+
+                    self.backward(arg);
                 },
             }
         }
     }
 
-    fn update(&mut self, parameters: &[Value]) {
-        for param in parameters {
-            self.program.code.push(Bytecode::Update);
-            self.program.ptr_args.push(*self.program.heap_map.get(&param.id()).unwrap());
-        }
-    }
+    // fn update(&mut self, parameters: &[Value]) {
+    //     for param in parameters {
+    //         self.program.code.push(Bytecode::Update);
+    //         self.program.ptr_args.push(*self.program.heap_map.get(&param.id()).unwrap());
+    //     }
+    // }
 }
 
 impl Program {
@@ -296,10 +298,12 @@ impl Program {
         codegen.forward(total_loss);
         total_loss.clear_visited();
 
+        codegen.program.code.push(Bytecode::SetTargetGrad);
+
         codegen.backward(total_loss);
         total_loss.clear_visited();
 
-        codegen.update(parameters);
+        // codegen.update(parameters);
 
         //println!("code:\n{:#?}", program.code);
 
@@ -381,8 +385,6 @@ impl Program {
                 heap[$($expr)*]
             };
         }
-
-        heap![self.total_loss_ptr + 1] = 1.0;
 
         for op in self.code.iter().cloned() {
             match op {
@@ -515,16 +517,25 @@ impl Program {
                     heap![arg_ptr] += out_value * out_grad;
                 },
 
-                Bytecode::Update => {
-                    let heap_ptr = ptr_args![ptr_arg_index];
-                    ptr_arg_index += 1;
-                    // println!("Update {heap_ptr}");
-                    // let v = heap![heap_ptr];
-                    // let g = heap![heap_ptr + 1];
-                    // println!("Update heap_ptr: {}, value: {}, grad: {}", heap_ptr, v, g);
-                    heap![heap_ptr] -= learning_rate * heap![heap_ptr + 1];
+                Bytecode::SetTargetGrad => {
+                    heap![self.total_loss_ptr + 1] = 1.0;
                 },
+
+                // Bytecode::Update => {
+                //     let heap_ptr = ptr_args![ptr_arg_index];
+                //     ptr_arg_index += 1;
+                //     // println!("Update {heap_ptr}");
+                //     // let v = heap![heap_ptr];
+                //     // let g = heap![heap_ptr + 1];
+                //     // println!("Update heap_ptr: {}, value: {}, grad: {}", heap_ptr, v, g);
+                //     heap![heap_ptr] -= learning_rate * heap![heap_ptr + 1];
+                // },
             }
+        }
+
+        // update parameters
+        for heap_ptr in (self.param_ptr..(self.param_ptr + self.param_count * 2)).step_by(2) {
+            heap![heap_ptr] -= learning_rate * heap![heap_ptr + 1];
         }
 
         heap![self.total_loss_ptr]
