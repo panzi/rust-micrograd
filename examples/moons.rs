@@ -65,7 +65,10 @@ fn main() {
     };
 
     println!("optimizing:");
+    let parameters = model.parameters();
     for (k, loss) in model.optimize(100, loss) {
+        //println!("scores: [{:?}]", scores.iter().map(|scorei| scorei.value()).join(", "));
+        println!("parameters: {:?}", parameters);
         println!("step {} loss {}, accuracy {}%", k, loss.total.value(), loss.accuracy * 100.0);
         if loss.accuracy > 0.99 {
             println!("stopping because accuracy > 99%");

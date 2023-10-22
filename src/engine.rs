@@ -418,8 +418,6 @@ impl Value {
         let inner: &mut ValueInner = &mut self.inner.borrow_mut();
         inner.value = value;
         inner.grad  = grad;
-        inner.op    = Op::Value;
-        inner.k     = 0; // not sure if needed, probably not
     }
 }
 

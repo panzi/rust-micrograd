@@ -16,7 +16,7 @@ pub enum Bytecode {
     TanH,          // arg value ptr, out value ptr
     Exp,           // arg value ptr, out value ptr
 
-    GradAdd,       // lhs value ptr, rhs value ptr, out grad ptr
+    GradAdd,       // lhs grad ptr, rhs grad ptr, out grad ptr
     GradMul,       // lhs value ptr, rhs value ptr, out grad ptr
     GradPow,       // lhs value ptr, rhs value ptr, out grad ptr
     GradReLu,      // arg grad ptr, out value ptr
@@ -69,11 +69,8 @@ impl<'a> Codegen<'a> {
             return *heap_ptr;
         }
 
-        let heap_ptr = self.program.heap_map.len();
-        if heap_ptr >= self.program.heap.len() {
-            self.program.heap.resize(heap_ptr + 1, 0.0);
-        }
-        self.program.heap[heap_ptr] = value;
+        let heap_ptr = self.program.heap.len();
+        self.program.heap.resize(heap_ptr + 1, value);
         self.const_map.insert(hvalue, heap_ptr);
 
         heap_ptr
@@ -171,8 +168,8 @@ impl<'a> Codegen<'a> {
                     let rhs_ptr = self.program.get_heap_ptr(rhs);
 
                     self.program.code.push(Bytecode::GradAdd);
-                    self.program.ptr_args.push(lhs_ptr);
-                    self.program.ptr_args.push(rhs_ptr);
+                    self.program.ptr_args.push(lhs_ptr + 1);
+                    self.program.ptr_args.push(rhs_ptr + 1);
                     self.program.ptr_args.push(out_grad_ptr);
 
                     self.backward(rhs);
@@ -319,7 +316,7 @@ impl Program {
 
         let heap_ptr = self.heap.len();
         self.heap_map.insert(node.id(), heap_ptr);
-        // + 1 for space for value and grad
+        // space for value and grad
         self.heap.resize(heap_ptr + 2, 0.0);
         let (value, grad) = node.get();
         self.heap[heap_ptr] = value;
@@ -336,7 +333,7 @@ impl Program {
             self.misses += 1;
             let heap_ptr = self.heap.len();
             self.heap_map.insert(node.id(), heap_ptr);
-            // + 1 for space for value and grad
+            // space for value and grad
             self.heap.resize(heap_ptr + 2, 0.0);
             heap_ptr
         };
@@ -348,6 +345,7 @@ impl Program {
         heap_ptr
     }
 
+    #[inline]
     pub fn get(&self, value: &Value) -> Option<Number> {
         self.heap_map.get(&value.id()).map(|heap_ptr| self.heap[*heap_ptr])
     }
@@ -456,8 +454,8 @@ impl Program {
                     // println!("GradAdd {lhs_ptr} {rhs_ptr} {out_ptr}");
 
                     let out_grad = heap![out_ptr];
-                    heap![lhs_ptr + 1] += out_grad;
-                    heap![rhs_ptr + 1] += out_grad;
+                    heap![lhs_ptr] += out_grad;
+                    heap![rhs_ptr] += out_grad;
                 },
                 Bytecode::GradMul => {
                     let lhs_ptr = ptr_args![ptr_arg_index];
