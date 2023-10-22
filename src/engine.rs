@@ -116,6 +116,12 @@ impl Value {
     }
 
     #[inline]
+    pub fn get(&self) -> (Number, Number) {
+        let inner: &ValueInner = &self.inner.borrow();
+        (inner.value, inner.grad)
+    }
+
+    #[inline]
     pub fn k(&self) -> usize {
         self.inner.borrow().k
     }
@@ -403,6 +409,15 @@ impl Value {
         let inner: &mut ValueInner = &mut self.inner.borrow_mut();
         inner.value = value;
         inner.grad  = 0.0;
+        inner.op    = Op::Value;
+        inner.k     = 0; // not sure if needed, probably not
+    }
+
+    #[inline]
+    pub(crate) fn assign_both(&mut self, value: Number, grad: Number) {
+        let inner: &mut ValueInner = &mut self.inner.borrow_mut();
+        inner.value = value;
+        inner.grad  = grad;
         inner.op    = Op::Value;
         inner.k     = 0; // not sure if needed, probably not
     }

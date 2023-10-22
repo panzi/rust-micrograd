@@ -37,6 +37,9 @@ pub struct Program {
     score_count: usize,
     total_loss_ptr: usize,
     heap_map: HashMap<usize, usize>,
+
+    hits: usize,
+    misses: usize,
 }
 
 struct Codegen<'a> {
@@ -227,7 +230,7 @@ impl<'a> Codegen<'a> {
         }
     }
 
-    fn update(&mut self, parameters: &'a [Value]) {
+    fn update(&mut self, parameters: &[Value]) {
         for param in parameters {
             self.program.code.push(Bytecode::Update);
             self.program.ptr_args.push(*self.program.heap_map.get(&param.id()).unwrap());
@@ -237,38 +240,52 @@ impl<'a> Codegen<'a> {
 
 impl Program {
     pub fn compile(parameters: &[Value], scores: &[Value], total_loss: &Value) -> Self {
-        let mut heap_map: HashMap<usize, usize> = HashMap::new();
+        let mut heap_map = HashMap::new();
+        let mut heap = vec![0.0; 2 * (parameters.len() + scores.len() + 1)];
 
-        let param_ptr = heap_map.len();
+        let mut heap_ptr = 0;
+
+        let param_ptr = heap_ptr;
         let param_count = parameters.len();
 
-        for value in parameters {
-            heap_map.insert(value.id(), heap_map.len());
+        for node in parameters {
+            heap_map.insert(node.id(), heap_ptr);
+            let (value, grad) = node.get();
+            heap[heap_ptr] = value;
+            heap[heap_ptr + 1] = grad;
+            heap_ptr += 2;
         }
 
-        let score_ptr = heap_map.len();
+        let score_ptr = heap_ptr;
         let score_count = scores.len();
 
-        for value in scores {
-            heap_map.insert(value.id(), heap_map.len());
+        for node in scores {
+            heap_map.insert(node.id(), heap_ptr);
+            let (value, grad) = node.get();
+            heap[heap_ptr] = value;
+            heap[heap_ptr + 1] = grad;
+            heap_ptr += 2;
         }
 
-        let total_loss_ptr = heap_map.len();
+        let total_loss_ptr = heap_ptr;
         heap_map.insert(total_loss.id(), total_loss_ptr);
-
-        let code: Vec<Bytecode> = Vec::new();
-        let ptr_args: Vec<usize> = Vec::new();
+        let (total_loss_value, total_loss_grad) = total_loss.get();
+        heap[total_loss_ptr] = total_loss_value;
+        heap[total_loss_ptr + 1] = total_loss_grad;
+        // heap_ptr += 2;
 
         let mut program = Program {
-            heap: Vec::with_capacity(heap_map.len()),
-            ptr_args,
-            code,
+            heap,
+            ptr_args: Vec::new(),
+            code: Vec::new(),
             param_ptr,
             param_count,
             score_ptr,
             score_count,
             total_loss_ptr,
             heap_map,
+            hits: 0,
+            misses: 0,
         };
 
         let mut codegen = Codegen {
@@ -291,41 +308,40 @@ impl Program {
 
     fn get_heap_ptr(&mut self, node: &Value) -> usize {
         if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
+            self.hits += 1;
             return *heap_ptr;
         }
+        self.misses += 1;
 
-        let heap_ptr = self.heap_map.len();
+        let heap_ptr = self.heap.len();
         self.heap_map.insert(node.id(), heap_ptr);
         // + 1 for space for value and grad
-        if heap_ptr + 1 >= self.heap.len() {
-            self.heap.resize(heap_ptr + 2, 0.0);
-        }
-        self.heap[heap_ptr] = node.value();
+        self.heap.resize(heap_ptr + 2, 0.0);
+        let (value, grad) = node.get();
+        self.heap[heap_ptr] = value;
+        self.heap[heap_ptr + 1] = grad;
 
         heap_ptr
     }
 
-    pub fn set_node(&mut self, node: &Value) {
-        if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
-            self.heap[*heap_ptr] = node.value();
+    pub fn insert(&mut self, node: &Value) -> usize {
+        let heap_ptr = if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
+            self.hits += 1;
+            *heap_ptr
         } else {
-            let heap_ptr = self.heap_map.len();
+            self.misses += 1;
+            let heap_ptr = self.heap.len();
             self.heap_map.insert(node.id(), heap_ptr);
             // + 1 for space for value and grad
-            if heap_ptr + 1 >= self.heap.len() {
-                self.heap.resize(heap_ptr + 2, 0.0);
-            }
-            self.heap[heap_ptr] = node.value();
-        }
-    }
+            self.heap.resize(heap_ptr + 2, 0.0);
+            heap_ptr
+        };
 
-    pub fn set_value(&mut self, node: &Value, value: Number) -> bool {
-        if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
-            self.heap[*heap_ptr] = value;
-            return true;
-        }
+        let (value, grad) = node.get();
+        self.heap[heap_ptr] = value;
+        self.heap[heap_ptr + 1] = grad;
 
-        false
+        heap_ptr
     }
 
     pub fn get(&self, value: &Value) -> Option<Number> {
@@ -366,6 +382,8 @@ impl Program {
             };
         }
 
+        heap![self.total_loss_ptr + 1] = 1.0;
+
         for op in self.code.iter().cloned() {
             match op {
                 Bytecode::Add => {
@@ -373,6 +391,7 @@ impl Program {
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("Add {lhs_ptr} {rhs_ptr} {res_ptr}");
 
                     heap![res_ptr] = heap![lhs_ptr] + heap![rhs_ptr];
                     heap![res_ptr + 1] = 0.0; // zero grad
@@ -382,6 +401,7 @@ impl Program {
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("Mul {lhs_ptr} {rhs_ptr} {res_ptr}");
 
                     heap![res_ptr] = heap![lhs_ptr] * heap![rhs_ptr];
                     heap![res_ptr + 1] = 0.0; // zero grad
@@ -391,6 +411,7 @@ impl Program {
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let res_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("Pow {lhs_ptr} {rhs_ptr} {res_ptr}");
 
                     heap![res_ptr] = heap![lhs_ptr].powf(heap![rhs_ptr]);
                     heap![res_ptr + 1] = 0.0; // zero grad
@@ -399,6 +420,7 @@ impl Program {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("ReLu {arg_ptr} {res_ptr}");
 
                     let value = heap![arg_ptr];
                     heap![res_ptr] = if value < 0.0 { 0.0 } else { value };
@@ -408,6 +430,7 @@ impl Program {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("TanH {arg_ptr} {res_ptr}");
 
                     let value = (heap![arg_ptr] * 2.0).exp();
                     heap![res_ptr] = (value - 1.0) / (value + 1.0);
@@ -417,6 +440,7 @@ impl Program {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("Exp {arg_ptr} {res_ptr}");
 
                     heap![res_ptr] = heap![arg_ptr].exp();
                     heap![res_ptr + 1] = 0.0; // zero grad
@@ -427,16 +451,18 @@ impl Program {
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("GradAdd {lhs_ptr} {rhs_ptr} {out_ptr}");
 
                     let out_grad = heap![out_ptr];
-                    heap![lhs_ptr] += out_grad;
-                    heap![rhs_ptr] += out_grad;
+                    heap![lhs_ptr + 1] += out_grad;
+                    heap![rhs_ptr + 1] += out_grad;
                 },
                 Bytecode::GradMul => {
                     let lhs_ptr = ptr_args![ptr_arg_index];
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("GradMul {lhs_ptr} {rhs_ptr} {out_ptr}");
 
                     let out_grad  = heap![out_ptr];
                     let lhs_value = heap![lhs_ptr];
@@ -449,6 +475,7 @@ impl Program {
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
                     let out_ptr = ptr_args![ptr_arg_index + 2];
                     ptr_arg_index += 3;
+                    // println!("GradPow {lhs_ptr} {rhs_ptr} {out_ptr}");
 
                     let out_grad  = heap![out_ptr];
                     let lhs_value = heap![lhs_ptr];
@@ -459,6 +486,7 @@ impl Program {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("GradReLu {arg_ptr} {out_ptr}");
 
                     let out_value = heap![out_ptr];
                     let out_grad  = heap![out_ptr + 1];
@@ -469,16 +497,18 @@ impl Program {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("GradTanH {arg_ptr} {out_ptr}");
 
                     let out_value = heap![out_ptr];
                     let out_grad  = heap![out_ptr + 1];
-                    let value: Number = 1.0 * (out_value * out_value);
+                    let value: Number = 1.0 - (out_value * out_value);
                     heap![arg_ptr] += value * out_grad;
                 },
                 Bytecode::GradExp => {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
+                    // println!("GradExp {arg_ptr} {out_ptr}");
 
                     let out_value = heap![out_ptr];
                     let out_grad  = heap![out_ptr + 1];
@@ -488,6 +518,10 @@ impl Program {
                 Bytecode::Update => {
                     let heap_ptr = ptr_args![ptr_arg_index];
                     ptr_arg_index += 1;
+                    // println!("Update {heap_ptr}");
+                    // let v = heap![heap_ptr];
+                    // let g = heap![heap_ptr + 1];
+                    // println!("Update heap_ptr: {}, value: {}, grad: {}", heap_ptr, v, g);
                     heap![heap_ptr] -= learning_rate * heap![heap_ptr + 1];
                 },
             }
@@ -496,15 +530,62 @@ impl Program {
         heap![self.total_loss_ptr]
     }
 
+    #[inline]
     pub fn total_loss(&self) -> Number {
         self.heap[self.total_loss_ptr]
     }
 
-    pub fn scores(&self) -> &[Number] {
-        &self.heap[self.score_ptr..(self.score_ptr + self.score_count)]
+    #[inline]
+    pub fn scores(&self) -> Vec<Number> {
+        let mut scores = Vec::with_capacity(self.score_count);
+        self.get_scores(&mut scores);
+        scores
     }
 
-    pub fn parameters(&self) -> &[Number] {
-        &self.heap[self.param_ptr..(self.param_ptr + self.param_count)]
+    #[inline]
+    pub fn get_scores(&self, scores: &mut Vec<Number>) {
+        for heap_ptr in (self.score_ptr..(self.score_ptr + self.score_count * 2)).step_by(2) {
+            scores.push(self.heap[heap_ptr]);
+        }
+    }
+
+    #[inline]
+    pub fn parameters(&self) -> Vec<Number> {
+        let mut parameters = Vec::with_capacity(self.param_count);
+        self.get_parameters(&mut parameters);
+        parameters
+    }
+
+    #[inline]
+    pub fn get_parameters(&self, parameters: &mut Vec<Number>) {
+        for heap_ptr in (self.param_ptr..(self.param_ptr + self.param_count * 2)).step_by(2) {
+            parameters.push(self.heap[heap_ptr]);
+        }
+    }
+
+    pub fn get_values(&self, values: &mut [Value]) {
+        for node in values.iter_mut() {
+            if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
+                let heap_ptr = *heap_ptr;
+                let value = self.heap[heap_ptr];
+                let grad  = self.heap[heap_ptr + 1];
+                node.assign_both(value, grad);
+            }
+        }
+    }
+
+    #[inline]
+    pub fn heap(&self) -> &[Number] {
+        &self.heap
+    }
+
+    #[inline]
+    pub fn hits(&self) -> usize {
+        self.hits
+    }
+
+    #[inline]
+    pub fn misses(&self) -> usize {
+        self.misses
     }
 }

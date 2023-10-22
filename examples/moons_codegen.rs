@@ -12,6 +12,7 @@ fn main() {
     let y = DEFAULT_Y;
 
     let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
+    // let mut rng = rand::thread_rng();
 
     // 2-layer neural network
     let mut model = MLP::new(2, &[16, 16, 1], &mut rng);
@@ -49,17 +50,22 @@ fn main() {
 
     let mut program = Program::compile(&model.parameters(), &scores, &total);
 
+    let params_before = program.parameters();
+    println!("parameters: {:?}", params_before);
+
     println!("optimizing:");
     let steps = 100;
+    let mut scores_buf = Vec::with_capacity(scores.len());
     for k in 0..steps {
         let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;
         program.exec(learning_rate);
 
         let total = program.total_loss();
-        let scores = program.scores();
+        scores_buf.clear();
+        program.get_scores(&mut scores_buf);
 
         // also get accuracy
-        let sum_accuracy: usize = y.iter().cloned().zip(scores.iter()).map(
+        let sum_accuracy: usize = y.iter().cloned().zip(scores_buf.iter()).map(
             |(yi, scorei)| ((yi > 0.0) == (*scorei > 0.0)) as usize
         ).sum();
 
@@ -72,9 +78,19 @@ fn main() {
         }
     }
 
-    for (node, value) in model.parameters().iter_mut().zip(program.parameters().iter().cloned()) {
-        node.assign(value);
-    }
+    println!("hits: {}", program.hits());
+    println!("misses: {}", program.misses());
+    println!("heap size: {}", program.heap().len());
+    let params_after = program.parameters();
+    println!("parameters: {:?}", params_after);
+    println!("before == after: {}", params_before == params_after);
+
+    scores_buf.clear();
+    program.get_scores(&mut scores_buf);
+    println!("scores: {:?}", scores_buf);
+    // println!("heap: {:?}", program.heap());
+
+    program.get_values(&mut model.parameters());
 
     // visualize decision boundary
     plot_moons(X, y, &mut model);
