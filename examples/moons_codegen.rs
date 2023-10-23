@@ -67,10 +67,6 @@ fn main() {
         let accuracy = sum_accuracy as Number / y.len() as Number;
 
         println!("step {} loss {}, accuracy {}%", k, total, accuracy * 100.0);
-        if accuracy > 0.99 {
-            println!("stopping because accuracy > 99%");
-            break;
-        }
     }
 
     // copy paramters back into model

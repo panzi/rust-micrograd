@@ -208,73 +208,82 @@ impl Value {
         Value::new_inner(self.value().exp(), Op::Exp(self.clone()))
     }
 
+    fn backward_intern(&mut self) {
+        let out: &mut ValueInner = &mut self.inner.borrow_mut();
+        let out_grad = out.grad;
+        let out_value = out.value;
+        match &out.op {
+            Op::Value => {},
+            Op::Add(lhs, rhs) => {
+                lhs.inner.borrow_mut().grad += out_grad;
+                rhs.inner.borrow_mut().grad += out_grad;
+            },
+            Op::Mul(lhs, rhs) => {
+                let lhs_value = lhs.inner.borrow().value;
+                let rhs_value = rhs.inner.borrow().value;
+
+                lhs.inner.borrow_mut().grad += rhs_value * out_grad;
+                rhs.inner.borrow_mut().grad += lhs_value * out_grad;
+            },
+            Op::Pow(lhs, rhs) => {
+                let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
+                lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
+            },
+            Op::ReLu(arg) => {
+                let value: Number = (out_value > 0.0).into();
+                arg.inner.borrow_mut().grad += value * out_grad;
+            },
+            Op::TanH(arg) => {
+                let value = 1.0 - (out_value * out_value);
+                arg.inner.borrow_mut().grad += value * out_grad;
+            },
+            Op::Exp(arg) => {
+                arg.inner.borrow_mut().grad += out_value * out_grad;
+            },
+        }
+    }
+
+    #[inline]
     pub fn backward(&mut self) {
-        fn backward(node: &Value) {
-            let mut out_ref = node.inner.borrow_mut();
-            let out: &mut ValueInner = &mut out_ref;
+        let mut topo = Vec::new();
+        self.backward_buffered(&mut topo);
+    }
+
+    /// To minimize allocations pass a topology buffer.
+    pub fn backward_buffered(&mut self, topo: &mut Vec<Value>) {
+        fn backward<'a>(node: &'a Value, topo: &mut Vec<Value>) {
+            let out: &mut ValueInner = &mut node.inner.borrow_mut();
             if !out.visited {
                 out.visited = true;
-                let out_grad = out.grad;
-                let out_value = out.value;
-                let op = out.op.clone();
-
                 // make sure the borrow ends before anything below is borrowed
-                drop(out_ref);
+                //drop(out_ref);
 
-                match op {
+                match &out.op {
                     Op::Value => {},
-                    Op::Add(lhs, rhs) => {
-                        lhs.inner.borrow_mut().grad += out_grad;
-                        rhs.inner.borrow_mut().grad += out_grad;
-
-                        backward(&rhs);
-                        backward(&lhs);
+                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                        backward(lhs, topo);
+                        backward(rhs, topo);
                     },
-                    Op::Mul(lhs, rhs) => {
-                        {
-                            let lhs_value = lhs.inner.borrow().value;
-                            let rhs_value = rhs.inner.borrow().value;
-
-                            lhs.inner.borrow_mut().grad += rhs_value * out_grad;
-                            rhs.inner.borrow_mut().grad += lhs_value * out_grad;
-                        }
-
-                        backward(&rhs);
-                        backward(&lhs);
+                    Op::Pow(lhs, _) => {
+                        backward(lhs, topo);
                     },
-                    Op::Pow(lhs, rhs) => {
-                        {
-                            let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
-                            lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
-                        }
-
-                        backward(&lhs);
-                    },
-                    Op::ReLu(arg) => {
-                        let value: Number = (out_value > 0.0).into();
-                        arg.inner.borrow_mut().grad += value * out_grad;
-
-                        backward(&arg);
-                    },
-                    Op::TanH(arg) => {
-                        let value = 1.0 - (out_value * out_value);
-                        arg.inner.borrow_mut().grad += value * out_grad;
-
-                        backward(&arg);
-                    },
-                    Op::Exp(arg) => {
-                        arg.inner.borrow_mut().grad += out_value * out_grad;
-
-                        backward(&arg);
+                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                        backward(arg, topo);
                     },
                 }
+                topo.push(node.clone());
             }
         }
 
         {
             self.inner.borrow_mut().grad = 1.0;
 
-            backward(self);
+            topo.clear();
+            backward(self, topo);
+
+            for node in topo.iter_mut().rev() {
+                node.backward_intern();
+            }
         }
 
         self.clear_visited();
@@ -322,8 +331,8 @@ impl Value {
             match &inner.op {
                 Op::Value => {},
                 Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
-                    rhs.clear_visited();
                     lhs.clear_visited();
+                    rhs.clear_visited();
                 },
                 Op::Pow(lhs, _) => {
                     lhs.clear_visited();

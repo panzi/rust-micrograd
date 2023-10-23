@@ -313,6 +313,7 @@ impl MLP {
     where
         L: FnMut(&MLP, usize) -> Loss + 'a,
     {
+        let mut topo = Vec::new();
         (0..steps).map(move |k| {
             // forward
             let mut res = loss(self, k);
@@ -320,7 +321,7 @@ impl MLP {
             // backward
             // the loss function needs to apply zero_grad() or do it as a side effect of e.g. refresh()
             // self.zero_grad();
-            res.total.backward();
+            res.total.backward_buffered(&mut topo);
 
             // update (sgd)
             let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;
@@ -334,6 +335,7 @@ impl MLP {
     where
         L: FnMut(&MLP, usize, usize) -> Loss + 'a,
     {
+        let mut topo = Vec::new();
         (0..steps).map(move |k| {
             // forward
             let mut res = loss(self, k, batch_size);
@@ -341,7 +343,7 @@ impl MLP {
             // backward
             // the loss function needs to apply zero_grad() or do it as a side effect of e.g. refresh()
             // self.zero_grad();
-            res.total.backward();
+            res.total.backward_buffered(&mut topo);
 
             // update (sgd)
             let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;

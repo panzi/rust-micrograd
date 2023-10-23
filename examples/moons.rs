@@ -70,10 +70,6 @@ fn main() {
     println!("optimizing:");
     for (k, loss) in model.optimize(100, loss) {
         println!("step {} loss {}, accuracy {}%", k, loss.total.value(), loss.accuracy * 100.0);
-        if loss.accuracy > 0.99 {
-            println!("stopping because accuracy > 99%");
-            break;
-        }
     }
 
     // visualize decision boundary
