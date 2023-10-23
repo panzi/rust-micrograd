@@ -249,37 +249,34 @@ impl Value {
         self.backward_buffered(&mut topo);
     }
 
+    pub fn build_topo(&self, topo: &mut Vec<Value>) {
+        let out: &mut ValueInner = &mut self.inner.borrow_mut();
+        if !out.visited {
+            out.visited = true;
+            match &out.op {
+                Op::Value => {},
+                Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
+                    lhs.build_topo(topo);
+                    rhs.build_topo(topo);
+                },
+                Op::Pow(lhs, _) => {
+                    lhs.build_topo(topo);
+                },
+                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                    arg.build_topo(topo);
+                },
+            }
+            topo.push(self.clone());
+        }
+    }
+
     /// To minimize allocations pass a topology buffer.
     pub fn backward_buffered(&mut self, topo: &mut Vec<Value>) {
-        fn backward<'a>(node: &'a Value, topo: &mut Vec<Value>) {
-            let out: &mut ValueInner = &mut node.inner.borrow_mut();
-            if !out.visited {
-                out.visited = true;
-                // make sure the borrow ends before anything below is borrowed
-                //drop(out_ref);
-
-                match &out.op {
-                    Op::Value => {},
-                    Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) => {
-                        backward(lhs, topo);
-                        backward(rhs, topo);
-                    },
-                    Op::Pow(lhs, _) => {
-                        backward(lhs, topo);
-                    },
-                    Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
-                        backward(arg, topo);
-                    },
-                }
-                topo.push(node.clone());
-            }
-        }
-
         {
             self.inner.borrow_mut().grad = 1.0;
 
             topo.clear();
-            backward(self, topo);
+            self.build_topo(topo);
 
             for node in topo.iter_mut().rev() {
                 node.backward_intern();
