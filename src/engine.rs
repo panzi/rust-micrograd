@@ -190,6 +190,9 @@ impl Value {
 
     #[inline]
     pub fn pow(&self, rhs: Number) -> Self {
+        if rhs == 1.0 {
+            return self.clone();
+        }
         Value::new_inner(self.value().powf(rhs), Op::Pow(self.clone(), rhs))
     }
 
@@ -430,25 +433,68 @@ impl Default for Value {
     }
 }
 
-impl std::iter::Sum for Value {
+impl AsRef<Value> for Value {
     #[inline]
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut sum = Value::new(0.0);
-        for value in iter {
-            sum += value;
-        }
-        sum
+    fn as_ref(&self) -> &Value {
+        self
     }
 }
 
-impl std::iter::Product for Value {
+impl std::iter::Sum<Value> for Value {
     #[inline]
-    fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        let mut sum = Value::new(1.0);
-        for value in iter {
-            sum *= value;
+    fn sum<I: Iterator<Item = Self>>(mut iter: I) -> Self {
+        if let Some(first) = iter.next() {
+            let mut sum = first.as_ref().clone();
+            for value in iter {
+                sum += value.as_ref();
+            }
+            return sum;
         }
-        sum
+        Value::new(0.0)
+    }
+}
+
+impl std::iter::Sum<&Value> for Value {
+    #[inline]
+    fn sum<I: Iterator>(mut iter: I) -> Value
+    where I::Item: AsRef<Value> {
+        if let Some(first) = iter.next() {
+            let mut sum = first.as_ref().clone();
+            for value in iter {
+                sum += value.as_ref();
+            }
+            return sum;
+        }
+        Value::new(0.0)
+    }
+}
+
+impl std::iter::Product<Value> for Value {
+    #[inline]
+    fn product<I: Iterator<Item = Self>>(mut iter: I) -> Self {
+        if let Some(first) = iter.next() {
+            let mut product = first.as_ref().clone();
+            for value in iter {
+                product *= value.as_ref();
+            }
+            return product;
+        }
+        Value::new(1.0)
+    }
+}
+
+impl std::iter::Product<&Value> for Value {
+    #[inline]
+    fn product<I: Iterator>(mut iter: I) -> Self
+    where I::Item: AsRef<Value> {
+        if let Some(first) = iter.next() {
+            let mut product = first.as_ref().clone();
+            for value in iter {
+                product *= value.as_ref();
+            }
+            return product;
+        }
+        Value::new(1.0)
     }
 }
 
@@ -555,7 +601,11 @@ impl Add<Number> for Value {
 
     #[inline]
     fn add(self, rhs: Number) -> Self::Output {
-        self + Value::new(rhs)
+        if rhs == 0.0 {
+            self
+        } else {
+            self + Value::new(rhs)
+        }
     }
 }
 
@@ -587,6 +637,13 @@ impl AddAssign for Value {
     }
 }
 
+impl AddAssign<&Value> for Value {
+    #[inline]
+    fn add_assign(&mut self, rhs: &Value) {
+        let _ = replace(self, self.clone() + rhs.clone());
+    }
+}
+
 impl AddAssign<Number> for Value {
     #[inline]
     fn add_assign(&mut self, rhs: Number) {
@@ -608,7 +665,11 @@ impl Mul<Number> for Value {
 
     #[inline]
     fn mul(self, rhs: Number) -> Self::Output {
-        self * Value::new(rhs)
+        if rhs == 1.0 {
+            self
+        } else {
+            self * Value::new(rhs)
+        }
     }
 }
 
@@ -644,6 +705,13 @@ impl MulAssign<Number> for Value {
     #[inline]
     fn mul_assign(&mut self, rhs: Number) {
         let _ = replace(self, self.clone() * rhs);
+    }
+}
+
+impl MulAssign<&Value> for Value {
+    #[inline]
+    fn mul_assign(&mut self, rhs: &Value) {
+        let _ = replace(self, self.clone() * rhs.clone());
     }
 }
 
@@ -721,6 +789,13 @@ impl SubAssign<Number> for Value {
     }
 }
 
+impl SubAssign<&Value> for Value {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &Value) {
+        let _ = replace(self, self.clone() - rhs.clone());
+    }
+}
+
 impl Div for Value {
     type Output = Value;
 
@@ -774,5 +849,12 @@ impl DivAssign<Number> for Value {
     #[inline]
     fn div_assign(&mut self, rhs: Number) {
         let _ = replace(self, self.clone() / rhs);
+    }
+}
+
+impl DivAssign<&Value> for Value {
+    #[inline]
+    fn div_assign(&mut self, rhs: &Value) {
+        let _ = replace(self, self.clone() / rhs.clone());
     }
 }

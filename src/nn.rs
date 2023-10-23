@@ -76,6 +76,13 @@ impl Neuron {
 
         if self.nonlinear { res.relu() } else { res }
     }
+
+    #[inline]
+    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
+        self.weights.iter().map(f).chain(
+            Some(&self.bias).into_iter().map(f)
+        )
+    }
 }
 
 impl Module for Neuron {
@@ -181,8 +188,10 @@ impl Layer {
     }
 
     #[inline]
-    fn count_parameters(&self) -> usize {
-        self.outputs * (self.inputs + 1)
+    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
+        self.neurons.iter().flat_map(
+            |neuron| neuron.map_parameters(f)
+        )
     }
 }
 
@@ -206,6 +215,11 @@ impl Module for Layer {
         for neuron in &mut self.neurons {
             neuron.update(learning_rate);
         }
+    }
+
+    #[inline]
+    fn count_parameters(&self) -> usize {
+        self.outputs * (self.inputs + 1)
     }
 
     #[inline]
@@ -336,6 +350,11 @@ impl MLP {
             (k, res)
         })
     }
+
+    #[inline]
+    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
+        self.layers.iter().flat_map(|layer| layer.map_parameters(f))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -400,7 +419,6 @@ impl Module for MLP {
         self.layers.iter().map(Layer::count_parameters).sum()
     }
 }
-
 
 impl Display for MLP {
     #[inline]
