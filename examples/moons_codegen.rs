@@ -74,7 +74,8 @@ fn main() {
         }
     }
 
-    model.for_each_paramter_mut(|value| { program.get_value(value); });
+    // copy paramters back into model
+    program.get_model(&mut model);
 
     // visualize decision boundary
     plot_moons(X, y, &mut model);

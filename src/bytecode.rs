@@ -547,6 +547,13 @@ impl Program {
         }
     }
 
+    /// Copy parameters back into model.
+    #[inline]
+    pub fn get_model(&self, model: &mut MLP) {
+        model.for_each_paramter_mut(|value| { self.get_value(value); });
+    }
+
+    #[inline]
     pub fn get_value(&self, node: &mut Value) -> bool {
         if let Some(heap_ptr) = self.value_map.get(&node.id()) {
             let heap_ptr = *heap_ptr;
