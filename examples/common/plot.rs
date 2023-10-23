@@ -9,10 +9,10 @@ use super::{meshgrid, arange};
 pub fn plot_moons(X: &[impl AsRef<[Number]> + std::fmt::Debug], y: &[Number], model: &mut MLP) {
     // visualize decision boundary
     let h = 0.25;
-    let x_min = X.iter().map(|row| row.as_ref()[0]).min_by(cmp_number_ref).unwrap_or(0.0);
-    let x_max = X.iter().map(|row| row.as_ref()[0]).max_by(cmp_number_ref).unwrap_or(0.0);
-    let y_min = X.iter().map(|row| row.as_ref()[1]).min_by(cmp_number_ref).unwrap_or(0.0);
-    let y_max = X.iter().map(|row| row.as_ref()[1]).max_by(cmp_number_ref).unwrap_or(0.0);
+    let x_min = X.iter().map(|row| row.as_ref()[0]).min_by(cmp_number_ref).unwrap_or(0.0) - 1.0;
+    let x_max = X.iter().map(|row| row.as_ref()[0]).max_by(cmp_number_ref).unwrap_or(0.0) + 1.0;
+    let y_min = X.iter().map(|row| row.as_ref()[1]).min_by(cmp_number_ref).unwrap_or(0.0) - 1.0;
+    let y_max = X.iter().map(|row| row.as_ref()[1]).max_by(cmp_number_ref).unwrap_or(0.0) + 1.0;
 
     let mut xmesh = Vec::new();
 

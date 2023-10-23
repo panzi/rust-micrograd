@@ -239,6 +239,7 @@ impl Display for Layer {
     }
 }
 
+/// Multilayer perceptron
 #[derive(Debug)]
 pub struct MLP {
     layers: Vec<Layer>,

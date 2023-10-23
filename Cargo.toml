@@ -18,5 +18,5 @@ serde_json = "1.0"
 
 [lib]
 
-[profile.release]
-debug = 1
+#[profile.release]
+#debug = 1
