@@ -162,6 +162,8 @@ impl<'a> Codegen<'a> {
         let mut topo = Vec::new();
         node.build_topo(&mut topo);
 
+        self.program.code.push(Bytecode::SetTargetGrad);
+
         for node in topo.iter().rev() {
             let out: &ValueInner = &node.inner.borrow();
 
@@ -301,8 +303,6 @@ impl Program {
 
         codegen.forward(total_loss);
         total_loss.clear_visited();
-
-        codegen.program.code.push(Bytecode::SetTargetGrad);
 
         codegen.backward(total_loss);
         total_loss.clear_visited();
