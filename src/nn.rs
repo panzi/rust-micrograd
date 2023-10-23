@@ -1,7 +1,6 @@
 use std::{fmt::Display, mem::swap};
 
 use join_string::Join;
-use rand::{RngCore, Rng};
 
 use crate::{Value, Number};
 
@@ -46,9 +45,9 @@ pub struct Neuron {
 
 impl Neuron {
     #[inline]
-    pub fn new(inputs: usize, nonlinear: bool, rng: &mut impl RngCore) -> Self {
+    pub fn new(inputs: usize, nonlinear: bool, mut rng: impl FnMut(f64, f64) -> f64) -> Self {
         Self {
-            weights: (0..inputs).map(|_| Value::new(rng.gen_range(-1.0..1.0))).collect(),
+            weights: (0..inputs).map(|_| Value::new(rng(-1.0, 1.0))).collect(),
             bias: Value::new(0.0),
             nonlinear,
         }
@@ -143,9 +142,9 @@ pub struct Layer {
 
 impl Layer {
     #[inline]
-    pub fn new(inputs: usize, outputs: usize, nonlinear: bool, rng: &mut impl RngCore) -> Self {
+    pub fn new(inputs: usize, outputs: usize, nonlinear: bool, mut rng: impl FnMut(f64, f64) -> f64) -> Self {
         Self {
-            neurons: (0..outputs).map(|_| Neuron::new(inputs, nonlinear, rng)).collect(),
+            neurons: (0..outputs).map(|_| Neuron::new(inputs, nonlinear, &mut rng)).collect(),
             inputs,
             outputs,
         }
@@ -248,7 +247,7 @@ pub struct MLP {
 
 impl MLP {
     #[inline]
-    pub fn new(inputs: usize, outputs: &[usize], rng: &mut impl RngCore) -> Self {
+    pub fn new(inputs: usize, outputs: &[usize], mut rng: impl FnMut(f64, f64) -> f64) -> Self {
         let mut sz = Vec::with_capacity(outputs.len() + 1);
         sz.push(inputs);
         sz.extend_from_slice(outputs);
@@ -257,7 +256,7 @@ impl MLP {
 
         Self {
             layers: (0..outputs.len()).map(|index|
-                Layer::new(sz[index], sz[index + 1], index != linear_index, rng)
+                Layer::new(sz[index], sz[index + 1], index != linear_index, &mut rng)
             ).collect(),
             max_layer_size: sz.iter().cloned().fold(0, std::cmp::max),
         }

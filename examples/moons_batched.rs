@@ -5,6 +5,7 @@ mod common;
 
 use crate::common::DEFAULT_X;
 use crate::common::DEFAULT_Y;
+use crate::common::FixedRandom;
 use crate::common::plot_moons;
 
 use rand::seq::SliceRandom;
@@ -17,7 +18,9 @@ fn main() {
     let mut rng = rand::rngs::StdRng::from_seed([0u8; 32]);
 
     // 2-layer neural network
-    let mut model = MLP::new(2, &[16, 16, 1], &mut rng);
+    // let mut model = MLP::new(2, &[16, 16, 1], |lower, upper| rng.gen_range(lower..upper));
+    let mut fixrng = FixedRandom::new();
+    let mut model = MLP::new(2, &[16, 16, 1], |_, _| fixrng.next());
     let batch_size = 50;
 
     println!("{:#?}", model);
