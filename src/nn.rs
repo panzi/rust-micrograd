@@ -25,6 +25,13 @@ pub trait Module {
     fn fold_paramters<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
 
     #[inline]
+    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+        self.fold_paramters((), |_, value| f(value))
+    }
+
+    fn for_each_paramter_mut<F>(&mut self, f: F) where F: FnMut(&mut Value);
+
+    #[inline]
     fn count_parameters(&self) -> usize {
         self.fold_paramters(0, |acc, _| { acc + 1 })
     }
@@ -40,13 +47,8 @@ pub struct Neuron {
 impl Neuron {
     #[inline]
     pub fn new(inputs: usize, nonlinear: bool, rng: &mut impl RngCore) -> Self {
-        let mut weights = Vec::with_capacity(inputs);
-        for _ in 0..inputs {
-            weights.push(Value::new(rng.gen_range(-1.0..1.0)));
-        }
-
         Self {
-            weights,
+            weights: (0..inputs).map(|_| Value::new(rng.gen_range(-1.0..1.0))).collect(),
             bias: Value::new(0.0),
             nonlinear,
         }
@@ -108,6 +110,18 @@ impl Module for Neuron {
     }
 
     #[inline]
+    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+        self.weights.iter().for_each(&mut f);
+        f(&self.bias);
+    }
+
+    #[inline]
+    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+        self.weights.iter_mut().for_each(&mut f);
+        f(&mut self.bias);
+    }
+
+    #[inline]
     fn count_parameters(&self) -> usize {
         self.weights.len() + 1
     }
@@ -122,20 +136,34 @@ impl Display for Neuron {
 
 #[derive(Debug)]
 pub struct Layer {
-    neurons: Vec<Neuron>
+    neurons: Vec<Neuron>,
+    inputs: usize,
+    outputs: usize,
 }
 
 impl Layer {
     #[inline]
     pub fn new(inputs: usize, outputs: usize, nonlinear: bool, rng: &mut impl RngCore) -> Self {
         Self {
-            neurons: (0..outputs).map(|_| Neuron::new(inputs, nonlinear, rng)).collect()
+            neurons: (0..outputs).map(|_| Neuron::new(inputs, nonlinear, rng)).collect(),
+            inputs,
+            outputs,
         }
     }
 
     #[inline]
     pub fn neurons(&self) -> &[Neuron] {
         &self.neurons
+    }
+
+    #[inline]
+    pub fn inputs(&self) -> usize {
+        self.inputs
+    }
+
+    #[inline]
+    pub fn outputs(&self) -> usize {
+        self.outputs
     }
 
     #[inline]
@@ -155,7 +183,7 @@ impl Layer {
 
     #[inline]
     fn count_parameters(&self) -> usize {
-        self.neurons.iter().map(Neuron::count_parameters).sum()
+        self.outputs * (self.inputs + 1)
     }
 }
 
@@ -188,6 +216,20 @@ impl Module for Layer {
         }
         acc
     }
+
+    #[inline]
+    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+        for neuron in &self.neurons {
+            neuron.for_each_paramter(&mut f);
+        }
+    }
+
+    #[inline]
+    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+        for neuron in &mut self.neurons {
+            neuron.for_each_paramter_mut(&mut f);
+        }
+    }
 }
 
 impl Display for Layer {
@@ -200,7 +242,7 @@ impl Display for Layer {
 #[derive(Debug)]
 pub struct MLP {
     layers: Vec<Layer>,
-    max_size: usize,
+    max_layer_size: usize,
 }
 
 impl MLP {
@@ -216,7 +258,7 @@ impl MLP {
             layers: (0..outputs.len()).map(|index|
                 Layer::new(sz[index], sz[index + 1], index != linear_index, rng)
             ).collect(),
-            max_size: sz.iter().cloned().fold(0, std::cmp::max),
+            max_layer_size: sz.iter().cloned().fold(0, std::cmp::max),
         }
     }
 
@@ -226,8 +268,8 @@ impl MLP {
     }
 
     #[inline]
-    pub fn max_size(&self) -> usize {
-        self.max_size
+    pub fn max_layer_size(&self) -> usize {
+        self.max_layer_size
     }
 
     pub fn forward_into(&mut self, input: &[Value], output: &mut Vec<Value>) {
@@ -243,7 +285,7 @@ impl MLP {
 
     #[inline]
     pub fn forward(&mut self, input: &[Value]) -> Vec<Value> {
-        let mut output = Vec::with_capacity(self.max_size);
+        let mut output = Vec::with_capacity(self.max_layer_size);
         self.forward_into(input, &mut output);
         output
     }
@@ -337,6 +379,20 @@ impl Module for MLP {
             acc = layer.fold_paramters(acc, &mut f);
         }
         acc
+    }
+
+    #[inline]
+    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+        for layer in &self.layers {
+            layer.for_each_paramter(&mut f);
+        }
+    }
+
+    #[inline]
+    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+        for layer in &mut self.layers {
+            layer.for_each_paramter_mut(&mut f);
+        }
     }
 
     #[inline]

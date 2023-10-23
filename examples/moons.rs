@@ -22,7 +22,7 @@ fn main() {
     println!("number of parameters: {}", model.count_parameters());
     println!();
 
-    let mut buf = Vec::with_capacity(model.max_size());
+    let mut buf = Vec::with_capacity(model.max_layer_size());
     let mut scores = Vec::with_capacity(X.len());
 
     // forward the model to get scores

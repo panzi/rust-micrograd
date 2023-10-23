@@ -22,7 +22,7 @@ fn main() {
     println!("number of parameters: {}", model.count_parameters());
     println!();
 
-    let mut buf = Vec::with_capacity(model.max_size());
+    let mut buf = Vec::with_capacity(model.max_layer_size());
     let mut scores = Vec::with_capacity(X.len());
 
     // forward the model to get scores
@@ -48,7 +48,7 @@ fn main() {
     ) * alpha;
     let total = data_loss + reg_loss;
 
-    let mut program = Program::compile(&model.parameters(), &scores, &total);
+    let mut program = Program::compile_model(&model, &scores, &total);
 
     println!("optimizing:");
     let steps = 100;
@@ -74,10 +74,7 @@ fn main() {
         }
     }
 
-    scores_buf.clear();
-    program.get_scores(&mut scores_buf);
-
-    program.get_values(&mut model.parameters());
+    model.for_each_paramter_mut(|value| { program.get_value(value); });
 
     // visualize decision boundary
     plot_moons(X, y, &mut model);

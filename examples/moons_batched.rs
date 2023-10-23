@@ -28,7 +28,7 @@ fn main() {
     // for later random selection
     let indices: Vec<_> = (0..X.len()).collect();
 
-    let mut buf = Vec::with_capacity(model.max_size());
+    let mut buf = Vec::with_capacity(model.max_layer_size());
     let mut scores = Vec::with_capacity(batch_size);
 
     // prepare batches which will later be updated

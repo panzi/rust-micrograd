@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{Number, Value, ValueInner, Op};
+use crate::{Number, Value, ValueInner, Op, Module, MLP};
 
 // node values and grads are paired up in heap (value, grad)
 
@@ -37,7 +37,7 @@ pub struct Program {
     score_ptr:   usize,
     score_count: usize,
     total_loss_ptr: usize,
-    heap_map: HashMap<usize, usize>,
+    value_map: HashMap<usize, usize>,
 }
 
 struct Codegen<'a> {
@@ -231,35 +231,63 @@ impl<'a> Codegen<'a> {
 }
 
 impl Program {
-    pub fn compile(parameters: &[Value], scores: &[Value], total_loss: &Value) -> Self {
-        let mut heap_map = HashMap::new();
+    pub fn compile_model(model: &MLP, scores: &[Value], total_loss: &Value) -> Self {
+        let param_count = model.count_parameters();
+
+        let mut value_map = HashMap::new();
+        let mut heap = vec![0.0; 2 * (param_count + scores.len() + 1)];
+
+        let mut heap_ptr = 0;
+
+        model.for_each_paramter(|node| {
+            value_map.insert(node.id(), heap_ptr);
+            heap[heap_ptr] = node.value();
+            heap_ptr += 2;
+        });
+
+        Program::compile_intern(heap, value_map, param_count, scores, total_loss)
+    }
+
+    pub fn compile_components(parameters: &[Value], scores: &[Value], total_loss: &Value) -> Self {
+        let mut value_map = HashMap::new();
         let mut heap = vec![0.0; 2 * (parameters.len() + scores.len() + 1)];
 
         let mut heap_ptr = 0;
 
-        let param_ptr = heap_ptr;
         let param_count = parameters.len();
 
         for node in parameters {
-            heap_map.insert(node.id(), heap_ptr);
+            value_map.insert(node.id(), heap_ptr);
             heap[heap_ptr] = node.value();
             heap_ptr += 2;
         }
+
+        Program::compile_intern(heap, value_map, param_count, scores, total_loss)
+    }
+
+    fn compile_intern(
+        mut heap: Vec<Number>,
+        mut value_map: HashMap<usize, usize>,
+        param_count: usize,
+        scores: &[Value],
+        total_loss: &Value
+    ) -> Self {
+        let param_ptr = 0;
+        let mut heap_ptr = param_count * 2;
 
         let score_ptr = heap_ptr;
         let score_count = scores.len();
 
         for node in scores {
-            heap_map.insert(node.id(), heap_ptr);
+            value_map.insert(node.id(), heap_ptr);
             heap_ptr += 2;
         }
 
         let total_loss_ptr = heap_ptr;
-        heap_map.insert(total_loss.id(), total_loss_ptr);
+        value_map.insert(total_loss.id(), total_loss_ptr);
         let (total_loss_value, total_loss_grad) = total_loss.get();
         heap[total_loss_ptr] = total_loss_value;
         heap[total_loss_ptr + 1] = total_loss_grad;
-        // heap_ptr += 2;
 
         let mut program = Program {
             heap,
@@ -270,7 +298,7 @@ impl Program {
             score_ptr,
             score_count,
             total_loss_ptr,
-            heap_map,
+            value_map,
         };
 
         let mut codegen = Codegen {
@@ -286,44 +314,25 @@ impl Program {
         codegen.backward(total_loss);
         total_loss.clear_visited();
 
-
         program
     }
 
     fn get_heap_ptr(&mut self, node: &Value) -> usize {
-        if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
+        if let Some(heap_ptr) = self.value_map.get(&node.id()) {
             return *heap_ptr;
         }
 
         let heap_ptr = self.heap.len();
-        self.heap_map.insert(node.id(), heap_ptr);
+        self.value_map.insert(node.id(), heap_ptr);
         // space for value and grad
         self.heap.resize(heap_ptr + 2, 0.0);
 
         heap_ptr
     }
 
-    pub fn insert(&mut self, node: &Value) -> usize {
-        let heap_ptr = if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
-            *heap_ptr
-        } else {
-            let heap_ptr = self.heap.len();
-            self.heap_map.insert(node.id(), heap_ptr);
-            // space for value and grad
-            self.heap.resize(heap_ptr + 2, 0.0);
-            heap_ptr
-        };
-
-        let (value, grad) = node.get();
-        self.heap[heap_ptr] = value;
-        self.heap[heap_ptr + 1] = grad;
-
-        heap_ptr
-    }
-
     #[inline]
-    pub fn get(&self, value: &Value) -> Option<Number> {
-        self.heap_map.get(&value.id()).map(|heap_ptr| self.heap[*heap_ptr])
+    pub fn get_number(&self, value: &Value) -> Option<Number> {
+        self.value_map.get(&value.id()).map(|heap_ptr| self.heap[*heap_ptr])
     }
 
     pub fn exec(&mut self, learning_rate: Number) -> Number {
@@ -331,7 +340,7 @@ impl Program {
         let ptr_args = &self.ptr_args[..];
         let mut ptr_arg_index = 0;
 
-        // risky unsafe business for speed
+        // risky unsafe business for speed (tiny difference, though)
         #[cfg(not(debug_assertions))]
         macro_rules! ptr_args {
             ($($expr:tt)*) => {
@@ -538,9 +547,21 @@ impl Program {
         }
     }
 
+    pub fn get_value(&self, node: &mut Value) -> bool {
+        if let Some(heap_ptr) = self.value_map.get(&node.id()) {
+            let heap_ptr = *heap_ptr;
+            let value = self.heap[heap_ptr];
+            let grad  = self.heap[heap_ptr + 1];
+            node.assign_both(value, grad);
+            return true;
+        }
+
+        false
+    }
+
     pub fn get_values(&self, values: &mut [Value]) {
         for node in values.iter_mut() {
-            if let Some(heap_ptr) = self.heap_map.get(&node.id()) {
+            if let Some(heap_ptr) = self.value_map.get(&node.id()) {
                 let heap_ptr = *heap_ptr;
                 let value = self.heap[heap_ptr];
                 let grad  = self.heap[heap_ptr + 1];
