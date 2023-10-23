@@ -50,23 +50,15 @@ fn main() {
 
     let mut program = Program::compile(&model.parameters(), &scores, &total);
 
-    let params_before = program.parameters();
-    //println!("parameters: {:?}", params_before);
-
     println!("optimizing:");
     let steps = 100;
     let mut scores_buf = Vec::with_capacity(scores.len());
-    let mut parameters = model.parameters();
     for k in 0..steps {
         let learning_rate: Number = 1.0 - 0.9 * k as Number / steps as Number;
-        program.exec(learning_rate);
+        let total = program.exec(learning_rate);
 
-        let total = program.total_loss();
         scores_buf.clear();
         program.get_scores(&mut scores_buf);
-        //println!("scores: {:?}", scores_buf);
-        program.get_values(&mut parameters);
-        println!("parameters: {:?}", parameters);
 
         // also get accuracy
         let sum_accuracy: usize = y.iter().cloned().zip(scores_buf.iter()).map(
@@ -82,17 +74,8 @@ fn main() {
         }
     }
 
-    println!("hits: {}", program.hits());
-    println!("misses: {}", program.misses());
-    println!("heap size: {}", program.heap().len());
-    let params_after = program.parameters();
-    //println!("parameters: {:?}", params_after);
-    println!("before == after: {}", params_before == params_after);
-
     scores_buf.clear();
     program.get_scores(&mut scores_buf);
-    //println!("scores: {:?}", scores_buf);
-    // println!("heap: {:?}", program.heap());
 
     program.get_values(&mut model.parameters());
 
