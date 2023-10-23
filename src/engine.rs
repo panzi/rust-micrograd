@@ -5,6 +5,7 @@ use std::fmt::{Display, Debug};
 use std::{rc::Rc, cell::RefCell};
 
 pub type Number = f64;
+pub(crate) type ValueId = usize;
 
 #[inline]
 pub fn cmp_number(lhs: Number, rhs: Number) -> Ordering {
@@ -331,8 +332,9 @@ impl Value {
         }
     }
 
-    pub(crate) fn id(&self) -> usize {
-        self.inner.as_ptr() as usize
+    #[inline]
+    pub(crate) fn id(&self) -> ValueId {
+        self.inner.as_ptr() as ValueId
     }
 
     #[inline]

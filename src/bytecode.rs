@@ -1,6 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{Number, Value, ValueInner, Op, Module, MLP};
+use crate::{Number, Value, ValueInner, Op, Module, MLP, ValueId};
+
+// More optimization opportunities:
+// - Reorder instructions so that same kinds but data independant operations follow each other.
+// - Reorder values in heap so that same node types are in consecutive areas of memory the same
+//   way as the instructions.
+// - Add new vectorized instructions that add/multiply/... multiple values at once.
 
 // node values and grads are paired up in heap (value, grad)
 
@@ -37,7 +43,7 @@ pub struct Program {
     score_ptr:   usize,
     score_count: usize,
     total_loss_ptr: usize,
-    value_map: HashMap<usize, usize>,
+    value_map: HashMap<ValueId, usize>,
 }
 
 struct Codegen<'a> {
@@ -267,7 +273,7 @@ impl Program {
 
     fn compile_intern(
         mut heap: Vec<Number>,
-        mut value_map: HashMap<usize, usize>,
+        mut value_map: HashMap<ValueId, usize>,
         param_count: usize,
         scores: &[Value],
         total_loss: &Value
