@@ -240,7 +240,7 @@ impl Program {
             heap_ptr += 2;
         });
 
-        Program::compile_intern(heap, value_map, param_count, scores, total_loss)
+        Self::compile_intern(heap, value_map, param_count, scores, total_loss)
     }
 
     pub fn compile_components(parameters: &[Value], scores: &[Value], total_loss: &Value) -> Self {
@@ -257,7 +257,7 @@ impl Program {
             heap_ptr += 2;
         }
 
-        Program::compile_intern(heap, value_map, param_count, scores, total_loss)
+        Self::compile_intern(heap, value_map, param_count, scores, total_loss)
     }
 
     fn compile_intern(
