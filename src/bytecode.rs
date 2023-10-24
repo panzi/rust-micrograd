@@ -362,8 +362,8 @@ impl Program {
             };
         }
 
-        for op in self.code.iter().cloned() {
-            match op {
+        for op in self.code.iter() {
+            match *op {
                 Bytecode::Add => {
                     let lhs_ptr = ptr_args![ptr_arg_index];
                     let rhs_ptr = ptr_args![ptr_arg_index + 1];
@@ -411,8 +411,7 @@ impl Program {
                     let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
 
-                    let value = (heap![arg_ptr] * 2.0).exp();
-                    heap![res_ptr] = (value - 1.0) / (value + 1.0);
+                    heap![res_ptr] = heap![arg_ptr].tanh();
                     heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::Exp => {

@@ -167,8 +167,7 @@ impl Value {
                 inner.value = if value < 0.0 { 0.0 } else { value };
             },
             Op::TanH(arg) => {
-                let value = (arg.refresh(k) * 2.0).exp();
-                inner.value = (value - 1.0) / (value + 1.0);
+                inner.value = arg.refresh(k).tanh();
             },
             Op::Exp(arg) => {
                 inner.value = arg.refresh(k).exp();
@@ -198,9 +197,7 @@ impl Value {
 
     #[inline]
     pub fn tanh(&self) -> Self {
-        let value = (self.value() * 2.0).exp();
-        let value = (value - 1.0) / (value + 1.0);
-        Value::new_inner(value, Op::TanH(self.clone()))
+        Value::new_inner(self.value().tanh(), Op::TanH(self.clone()))
     }
 
     #[inline]
