@@ -24,11 +24,11 @@ pub trait Module {
     fn fold_paramters<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
 
     #[inline]
-    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
         self.fold_paramters((), |_, value| f(value))
     }
 
-    fn for_each_paramter_mut<F>(&mut self, f: F) where F: FnMut(&mut Value);
+    fn for_each_parameter_mut<F>(&mut self, f: F) where F: FnMut(&mut Value);
 
     #[inline]
     fn count_parameters(&self) -> usize {
@@ -116,13 +116,13 @@ impl Module for Neuron {
     }
 
     #[inline]
-    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
         self.weights.iter().for_each(&mut f);
         f(&self.bias);
     }
 
     #[inline]
-    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
         self.weights.iter_mut().for_each(&mut f);
         f(&mut self.bias);
     }
@@ -231,16 +231,16 @@ impl Module for Layer {
     }
 
     #[inline]
-    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
         for neuron in &self.neurons {
-            neuron.for_each_paramter(&mut f);
+            neuron.for_each_parameter(&mut f);
         }
     }
 
     #[inline]
-    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
         for neuron in &mut self.neurons {
-            neuron.for_each_paramter_mut(&mut f);
+            neuron.for_each_parameter_mut(&mut f);
         }
     }
 }
@@ -403,16 +403,16 @@ impl Module for MLP {
     }
 
     #[inline]
-    fn for_each_paramter<F>(&self, mut f: F) where F: FnMut(&Value) {
+    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
         for layer in &self.layers {
-            layer.for_each_paramter(&mut f);
+            layer.for_each_parameter(&mut f);
         }
     }
 
     #[inline]
-    fn for_each_paramter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
+    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
         for layer in &mut self.layers {
-            layer.for_each_paramter_mut(&mut f);
+            layer.for_each_parameter_mut(&mut f);
         }
     }
 
