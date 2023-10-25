@@ -462,9 +462,10 @@ impl Program {
                     ptr_arg_index += 2;
 
                     let out_value = heap![out_ptr];
-                    let out_grad  = heap![out_ptr + 1];
-                    let value: Number = (out_value > 0.0).into();
-                    heap![arg_ptr] += value * out_grad;
+                    if out_value > 0.0 {
+                        let out_grad  = heap![out_ptr + 1];
+                        heap![arg_ptr] += out_grad;
+                    }
                 },
                 Bytecode::GradTanH => {
                     let arg_ptr = ptr_args![ptr_arg_index];

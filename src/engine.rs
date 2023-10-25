@@ -227,8 +227,9 @@ impl Value {
                 lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
             },
             Op::ReLU(arg) => {
-                let value: Number = (out_value > 0.0).into();
-                arg.inner.borrow_mut().grad += value * out_grad;
+                if out_value > 0.0 {
+                    arg.inner.borrow_mut().grad += out_grad;
+                }
             },
             Op::TanH(arg) => {
                 let value = 1.0 - (out_value * out_value);
