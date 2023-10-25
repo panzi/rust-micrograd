@@ -180,6 +180,22 @@ impl Value {
     }
 
     #[inline]
+    pub fn children(&self) -> impl std::iter::Iterator<Item = Value> {
+        // Always the same number of `Optional`s in a chain so that
+        // the return value of all the expressions is the same.
+        match &self.inner.borrow().op {
+            Op::Value =>
+                None.into_iter().chain(None),
+            Op::Add(lhs, rhs) | Op::Mul(lhs, rhs) =>
+                Some(lhs.clone()).into_iter().chain(Some(rhs.clone())),
+            Op::Pow(lhs, _) =>
+                Some(lhs.clone()).into_iter().chain(None),
+            Op::ReLU(arg) | Op::TanH(arg) | Op::Exp(arg) =>
+                Some(arg.clone()).into_iter().chain(None),
+        }
+    }
+
+    #[inline]
     pub fn relu(&self) -> Self {
         let value = self.value();
         let value = if value < 0.0 { 0.0 } else { value };
