@@ -43,10 +43,7 @@ fn main() {
 
     // L2 regularization
     let alpha: Number = 1e-4;
-    let reg_loss = model.fold_paramters(
-        Value::new(0.0),
-        |acc, value| acc + (value * value)
-    ) * alpha;
+    let reg_loss = model.parameters().map(|value| value * value).sum::<Value>() * alpha;
     let mut total = data_loss + reg_loss;
 
     let loss = |_model: &MLP, k: usize| {

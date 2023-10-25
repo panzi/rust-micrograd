@@ -234,11 +234,11 @@ impl Program {
 
         let mut heap_ptr = 0;
 
-        model.for_each_parameter(|node| {
+        for node in model.parameters() {
             value_map.insert(node.id(), heap_ptr);
             heap[heap_ptr] = node.value();
             heap_ptr += 2;
-        });
+        }
 
         Program::compile_intern(heap, value_map, param_count, scores, total_loss)
     }
@@ -542,7 +542,9 @@ impl Program {
     /// Copy parameters back into model.
     #[inline]
     pub fn get_model(&self, model: &mut MLP) {
-        model.for_each_parameter_mut(|value| { self.get_value(value); });
+        for node in model.parameters_mut() {
+            self.get_value(node);
+        }
     }
 
     #[inline]

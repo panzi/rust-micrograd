@@ -5,35 +5,11 @@ use join_string::Join;
 use crate::{Value, Number};
 
 pub trait Module {
-    fn zero_grad(&mut self) {
-        for param in self.parameters().iter_mut() {
-            param.zero_grad();
-        }
-    }
-
-    fn gather_parameters(&self, params: &mut Vec<Value>);
-
-    fn parameters(&self) -> Vec<Value> {
-        let mut params = Vec::new();
-        self.gather_parameters(&mut params);
-        params
-    }
+    fn zero_grad(&mut self);
 
     fn update(&mut self, learning_rate: Number);
 
-    fn fold_paramters<T, F>(&self, init: T, f: F) -> T where F: FnMut(T, &Value) -> T;
-
-    #[inline]
-    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
-        self.fold_paramters((), |_, value| f(value))
-    }
-
-    fn for_each_parameter_mut<F>(&mut self, f: F) where F: FnMut(&mut Value);
-
-    #[inline]
-    fn count_parameters(&self) -> usize {
-        self.fold_paramters(0, |acc, _| { acc + 1 })
-    }
+    fn count_parameters(&self) -> usize;
 }
 
 #[derive(Debug)]
@@ -78,10 +54,13 @@ impl Neuron {
     }
 
     #[inline]
-    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
-        self.weights.iter().map(f).chain(
-            Some(&self.bias).into_iter().map(f)
-        )
+    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
+        self.weights.iter().chain(Some(&self.bias).into_iter())
+    }
+
+    #[inline]
+    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
+        self.weights.iter_mut().chain(Some(&mut self.bias).into_iter())
     }
 }
 
@@ -95,36 +74,11 @@ impl Module for Neuron {
     }
 
     #[inline]
-    fn gather_parameters(&self, params: &mut Vec<Value>) {
-        params.reserve(self.weights.len() + 1);
-        params.extend_from_slice(&self.weights);
-        params.push(self.bias.clone());
-    }
-
-    #[inline]
     fn update(&mut self, learning_rate: Number) {
         for param in &mut self.weights {
             param.update(learning_rate);
         }
         self.bias.update(learning_rate);
-    }
-
-    #[inline]
-    fn fold_paramters<T, F>(&self, init: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
-        let acc = self.weights.iter().fold(init, &mut f);
-        f(acc, &self.bias)
-    }
-
-    #[inline]
-    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
-        self.weights.iter().for_each(&mut f);
-        f(&self.bias);
-    }
-
-    #[inline]
-    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
-        self.weights.iter_mut().for_each(&mut f);
-        f(&mut self.bias);
     }
 
     #[inline]
@@ -188,10 +142,13 @@ impl Layer {
     }
 
     #[inline]
-    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
-        self.neurons.iter().flat_map(
-            |neuron| neuron.map_parameters(f)
-        )
+    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
+        self.neurons.iter().flat_map(|neuron| neuron.parameters())
+    }
+
+    #[inline]
+    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
+        self.neurons.iter_mut().flat_map(|neuron| neuron.parameters_mut())
     }
 }
 
@@ -200,13 +157,6 @@ impl Module for Layer {
     fn zero_grad(&mut self) {
         for neuron in &mut self.neurons {
             neuron.zero_grad();
-        }
-    }
-
-    #[inline]
-    fn gather_parameters(&self, params: &mut Vec<Value>) {
-        for neuron in &self.neurons {
-            neuron.gather_parameters(params);
         }
     }
 
@@ -220,28 +170,6 @@ impl Module for Layer {
     #[inline]
     fn count_parameters(&self) -> usize {
         self.outputs * (self.inputs + 1)
-    }
-
-    #[inline]
-    fn fold_paramters<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
-        for neuron in &self.neurons {
-            acc = neuron.fold_paramters(acc, &mut f);
-        }
-        acc
-    }
-
-    #[inline]
-    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
-        for neuron in &self.neurons {
-            neuron.for_each_parameter(&mut f);
-        }
-    }
-
-    #[inline]
-    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
-        for neuron in &mut self.neurons {
-            neuron.for_each_parameter_mut(&mut f);
-        }
     }
 }
 
@@ -354,8 +282,13 @@ impl MLP {
     }
 
     #[inline]
-    pub fn map_parameters<'a, T>(&'a self, f: &'a impl Fn(&Value) -> T) -> impl std::iter::Iterator<Item = T> + 'a {
-        self.layers.iter().flat_map(|layer| layer.map_parameters(f))
+    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
+        self.layers.iter().flat_map(|layer| layer.parameters())
+    }
+
+    #[inline]
+    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
+        self.layers.iter_mut().flat_map(|layer| layer.parameters_mut())
     }
 }
 
@@ -381,38 +314,9 @@ impl Module for MLP {
     }
 
     #[inline]
-    fn gather_parameters(&self, params: &mut Vec<Value>) {
-        for layer in &self.layers {
-            layer.gather_parameters(params);
-        }
-    }
-
-    #[inline]
     fn update(&mut self, learning_rate: Number) {
         for layer in &mut self.layers {
             layer.update(learning_rate);
-        }
-    }
-
-    #[inline]
-    fn fold_paramters<T, F>(&self, mut acc: T, mut f: F) -> T where F: FnMut(T, &Value) -> T {
-        for layer in &self.layers {
-            acc = layer.fold_paramters(acc, &mut f);
-        }
-        acc
-    }
-
-    #[inline]
-    fn for_each_parameter<F>(&self, mut f: F) where F: FnMut(&Value) {
-        for layer in &self.layers {
-            layer.for_each_parameter(&mut f);
-        }
-    }
-
-    #[inline]
-    fn for_each_parameter_mut<F>(&mut self, mut f: F) where F: FnMut(&mut Value) {
-        for layer in &mut self.layers {
-            layer.for_each_parameter_mut(&mut f);
         }
     }
 
