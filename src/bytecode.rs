@@ -18,14 +18,14 @@ pub enum Bytecode {
     Add,           // lhs value ptr, rhs value ptr, out value ptr
     Mul,           // lhs value ptr, rhs value ptr, out value ptr
     Pow,           // lhs value ptr, rhs value ptr, out value ptr
-    ReLu,          // arg value ptr, out value ptr
+    ReLU,          // arg value ptr, out value ptr
     TanH,          // arg value ptr, out value ptr
     Exp,           // arg value ptr, out value ptr
 
     GradAdd,       // lhs grad ptr, rhs grad ptr, out grad ptr
     GradMul,       // lhs value ptr, rhs value ptr, out grad ptr
     GradPow,       // lhs value ptr, rhs value ptr, out grad ptr
-    GradReLu,      // arg grad ptr, out value ptr
+    GradReLU,      // arg grad ptr, out value ptr
     GradTanH,      // arg grad ptr, out value ptr
     GradExp,       // arg grad ptr, out value ptr
 
@@ -127,12 +127,12 @@ impl<'a> Codegen<'a> {
                     self.program.ptr_args.push(rhs_ptr);
                     self.program.ptr_args.push(out_ptr);
                 },
-                Op::ReLu(arg) => {
+                Op::ReLU(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
                     self.forward(arg);
 
-                    self.program.code.push(Bytecode::ReLu);
+                    self.program.code.push(Bytecode::ReLU);
                     self.program.ptr_args.push(arg_ptr);
                     self.program.ptr_args.push(out_ptr);
                 },
@@ -199,10 +199,10 @@ impl<'a> Codegen<'a> {
                     self.program.ptr_args.push(rhs_ptr);
                     self.program.ptr_args.push(out_grad_ptr);
                 },
-                Op::ReLu(arg) => {
+                Op::ReLU(arg) => {
                     let arg_ptr = self.program.get_heap_ptr(arg);
 
-                    self.program.code.push(Bytecode::GradReLu);
+                    self.program.code.push(Bytecode::GradReLU);
                     self.program.ptr_args.push(arg_ptr + 1);
                     self.program.ptr_args.push(out_value_ptr);
                 },
@@ -397,7 +397,7 @@ impl Program {
                     heap![res_ptr] = lhs_value.powf(rhs_value);
                     heap![res_ptr + 1] = 0.0; // zero grad
                 },
-                Bytecode::ReLu => {
+                Bytecode::ReLU => {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let res_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;
@@ -456,7 +456,7 @@ impl Program {
                     let rhs_value = heap![rhs_ptr];
                     heap![lhs_ptr + 1] += rhs_value * lhs_value.powf(rhs_value - 1.0) * out_grad;
                 },
-                Bytecode::GradReLu => {
+                Bytecode::GradReLU => {
                     let arg_ptr = ptr_args![ptr_arg_index];
                     let out_ptr = ptr_args![ptr_arg_index + 1];
                     ptr_arg_index += 2;

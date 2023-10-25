@@ -30,7 +30,7 @@ pub enum Op {
     Add(Value, Value),
     Mul(Value, Value),
     Pow(Value, Number),
-    ReLu(Value),
+    ReLU(Value),
     TanH(Value),
     Exp(Value),
 }
@@ -58,7 +58,7 @@ impl Op {
 
     #[inline]
     pub fn is_relu(&self) -> bool {
-        matches!(self, Op::ReLu(_))
+        matches!(self, Op::ReLU(_))
     }
 
     #[inline]
@@ -162,7 +162,7 @@ impl Value {
             Op::Pow(lhs, rhs) => {
                 inner.value = lhs.refresh(k).powf(*rhs);
             },
-            Op::ReLu(arg) => {
+            Op::ReLU(arg) => {
                 let value = arg.refresh(k);
                 inner.value = if value < 0.0 { 0.0 } else { value };
             },
@@ -184,7 +184,7 @@ impl Value {
         let value = self.value();
         let value = if value < 0.0 { 0.0 } else { value };
 
-        Value::from_op(value, Op::ReLu(self.clone()))
+        Value::from_op(value, Op::ReLU(self.clone()))
     }
 
     #[inline]
@@ -226,7 +226,7 @@ impl Value {
                 let lhs_inner: &mut ValueInner = &mut lhs.inner.borrow_mut();
                 lhs_inner.grad += rhs * lhs_inner.value.powf(rhs - 1.0) * out_grad;
             },
-            Op::ReLu(arg) => {
+            Op::ReLU(arg) => {
                 let value: Number = (out_value > 0.0).into();
                 arg.inner.borrow_mut().grad += value * out_grad;
             },
@@ -259,7 +259,7 @@ impl Value {
                 Op::Pow(lhs, _) => {
                     lhs.build_topo(topo);
                 },
-                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                Op::ReLU(arg) | Op::TanH(arg) | Op::Exp(arg) => {
                     arg.build_topo(topo);
                 },
             }
@@ -303,7 +303,7 @@ impl Value {
                 Op::Pow(lhs, _) => {
                     count += count_nodes(lhs);
                 },
-                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                Op::ReLU(arg) | Op::TanH(arg) | Op::Exp(arg) => {
                     count += count_nodes(arg);
                 }
             }
@@ -331,7 +331,7 @@ impl Value {
                 Op::Pow(lhs, _) => {
                     lhs.clear_visited();
                 },
-                Op::ReLu(arg) | Op::TanH(arg) | Op::Exp(arg) => {
+                Op::ReLU(arg) | Op::TanH(arg) | Op::Exp(arg) => {
                     arg.clear_visited();
                 },
             }
@@ -351,7 +351,7 @@ impl Value {
             Op::Add(_, _) => 1,
             Op::Mul(_, _) => 2,
             Op::Pow(_, _) => 3,
-            Op::ReLu(_)   => 4,
+            Op::ReLU(_)   => 4,
             Op::TanH(_)   => 4,
             Op::Exp(_)    => 4,
         }
@@ -583,7 +583,7 @@ impl Display for Value {
                     write!(f, "{} ^ {}", lhs, rhs)
                 }
             },
-            Op::ReLu(arg) => write!(f, "relu({})", arg),
+            Op::ReLU(arg) => write!(f, "relu({})", arg),
             Op::TanH(arg) => write!(f, "tanh({})", arg),
             Op::Exp(arg)  => write!(f, "exp({})", arg),
         }
