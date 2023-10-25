@@ -21,7 +21,7 @@ pub struct Neuron {
 
 impl Neuron {
     #[inline]
-    pub fn new(inputs: usize, nonlinear: bool, mut rng: impl FnMut(f64, f64) -> f64) -> Self {
+    pub fn new(inputs: usize, nonlinear: bool, mut rng: impl FnMut(Number, Number) -> Number) -> Self {
         Self {
             weights: (0..inputs).map(|_| Value::new(rng(-1.0, 1.0))).collect(),
             bias: Value::new(0.0),
@@ -54,13 +54,13 @@ impl Neuron {
     }
 
     #[inline]
-    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
-        self.weights.iter().chain(Some(&self.bias).into_iter())
+    pub fn parameters(&self) -> impl std::iter::Iterator<Item = &Value> {
+        self.weights.iter().chain(Some(&self.bias))
     }
 
     #[inline]
-    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
-        self.weights.iter_mut().chain(Some(&mut self.bias).into_iter())
+    pub fn parameters_mut(&mut self) -> impl std::iter::Iterator<Item = &mut Value> {
+        self.weights.iter_mut().chain(Some(&mut self.bias))
     }
 }
 
@@ -103,7 +103,7 @@ pub struct Layer {
 
 impl Layer {
     #[inline]
-    pub fn new(inputs: usize, outputs: usize, nonlinear: bool, mut rng: impl FnMut(f64, f64) -> f64) -> Self {
+    pub fn new(inputs: usize, outputs: usize, nonlinear: bool, mut rng: impl FnMut(Number, Number) -> Number) -> Self {
         Self {
             neurons: (0..outputs).map(|_| Neuron::new(inputs, nonlinear, &mut rng)).collect(),
             inputs,
@@ -142,12 +142,12 @@ impl Layer {
     }
 
     #[inline]
-    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
+    pub fn parameters(&self) -> impl std::iter::Iterator<Item = &Value> {
         self.neurons.iter().flat_map(|neuron| neuron.parameters())
     }
 
     #[inline]
-    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
+    pub fn parameters_mut(&mut self) -> impl std::iter::Iterator<Item = &mut Value> {
         self.neurons.iter_mut().flat_map(|neuron| neuron.parameters_mut())
     }
 }
@@ -189,7 +189,7 @@ pub struct MLP {
 
 impl MLP {
     #[inline]
-    pub fn new(inputs: usize, outputs: &[usize], mut rng: impl FnMut(f64, f64) -> f64) -> Self {
+    pub fn new(inputs: usize, outputs: &[usize], mut rng: impl FnMut(Number, Number) -> Number) -> Self {
         let mut sz = Vec::with_capacity(outputs.len() + 1);
         sz.push(inputs);
         sz.extend_from_slice(outputs);
@@ -282,12 +282,12 @@ impl MLP {
     }
 
     #[inline]
-    pub fn parameters<'a>(&'a self) -> impl std::iter::Iterator<Item = &'a Value> {
+    pub fn parameters(&self) -> impl std::iter::Iterator<Item = &Value> {
         self.layers.iter().flat_map(|layer| layer.parameters())
     }
 
     #[inline]
-    pub fn parameters_mut<'a>(&'a mut self) -> impl std::iter::Iterator<Item = &'a mut Value> {
+    pub fn parameters_mut(&mut self) -> impl std::iter::Iterator<Item = &mut Value> {
         self.layers.iter_mut().flat_map(|layer| layer.parameters_mut())
     }
 }
