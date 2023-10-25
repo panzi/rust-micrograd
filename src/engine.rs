@@ -90,11 +90,11 @@ pub struct Value {
 impl Value {
     #[inline]
     pub fn new(value: Number) -> Self {
-        Value::new_inner(value, Op::Value)
+        Value::from_op(value, Op::Value)
     }
 
     #[inline]
-    fn new_inner(value: Number, op: Op) -> Self {
+    fn from_op(value: Number, op: Op) -> Self {
         Self {
             inner: Rc::new(RefCell::new(ValueInner {
                 value,
@@ -184,7 +184,7 @@ impl Value {
         let value = self.value();
         let value = if value < 0.0 { 0.0 } else { value };
 
-        Value::new_inner(value, Op::ReLu(self.clone()))
+        Value::from_op(value, Op::ReLu(self.clone()))
     }
 
     #[inline]
@@ -192,17 +192,17 @@ impl Value {
         if rhs == 1.0 {
             return self.clone();
         }
-        Value::new_inner(self.value().powf(rhs), Op::Pow(self.clone(), rhs))
+        Value::from_op(self.value().powf(rhs), Op::Pow(self.clone(), rhs))
     }
 
     #[inline]
     pub fn tanh(&self) -> Self {
-        Value::new_inner(self.value().tanh(), Op::TanH(self.clone()))
+        Value::from_op(self.value().tanh(), Op::TanH(self.clone()))
     }
 
     #[inline]
     pub fn exp(&self) -> Self {
-        Value::new_inner(self.value().exp(), Op::Exp(self.clone()))
+        Value::from_op(self.value().exp(), Op::Exp(self.clone()))
     }
 
     fn backward_intern(&mut self) {
@@ -595,7 +595,7 @@ impl Add for Value {
 
     #[inline]
     fn add(self, rhs: Self) -> Self::Output {
-        Value::new_inner(self.value() + rhs.value(), Op::Add(self, rhs))
+        Value::from_op(self.value() + rhs.value(), Op::Add(self, rhs))
     }
 }
 
@@ -659,7 +659,7 @@ impl Mul for Value {
 
     #[inline]
     fn mul(self, rhs: Self) -> Self::Output {
-        Value::new_inner(self.value() * rhs.value(), Op::Mul(self, rhs))
+        Value::from_op(self.value() * rhs.value(), Op::Mul(self, rhs))
     }
 }
 
