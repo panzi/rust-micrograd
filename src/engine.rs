@@ -163,8 +163,7 @@ impl Value {
                 inner.value = lhs.refresh(k).powf(*rhs);
             },
             Op::ReLU(arg) => {
-                let value = arg.refresh(k);
-                inner.value = if value < 0.0 { 0.0 } else { value };
+                inner.value = Number::max(arg.refresh(k), 0.0);
             },
             Op::TanH(arg) => {
                 inner.value = arg.refresh(k).tanh();
@@ -197,8 +196,7 @@ impl Value {
 
     #[inline]
     pub fn relu(&self) -> Self {
-        let value = self.value();
-        let value = if value < 0.0 { 0.0 } else { value };
+        let value = Number::max(self.value(), 0.0);
 
         Value::from_op(value, Op::ReLU(self.clone()))
     }

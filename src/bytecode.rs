@@ -403,7 +403,7 @@ impl Program {
                     ptr_arg_index += 2;
 
                     let value = heap![arg_ptr];
-                    heap![res_ptr] = if value < 0.0 { 0.0 } else { value };
+                    heap![res_ptr] = Number::max(value, 0.0);
                     heap![res_ptr + 1] = 0.0; // zero grad
                 },
                 Bytecode::TanH => {
@@ -463,7 +463,7 @@ impl Program {
 
                     let out_value = heap![out_ptr];
                     if out_value > 0.0 {
-                        let out_grad  = heap![out_ptr + 1];
+                        let out_grad = heap![out_ptr + 1];
                         heap![arg_ptr] += out_grad;
                     }
                 },
