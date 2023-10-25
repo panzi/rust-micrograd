@@ -805,7 +805,7 @@ impl Div for Value {
     #[inline]
     fn div(self, rhs: Self) -> Self::Output {
         if rhs.is_value() {
-            return self * (1.0 / rhs.value())
+            return self * (1.0 / rhs.value());
         }
         self * rhs.pow(-1.0)
     }

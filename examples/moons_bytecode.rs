@@ -73,5 +73,5 @@ fn main() {
     program.get_model(&mut model);
 
     // visualize decision boundary
-    //plot_moons(X, y, &mut model);
+    plot_moons(X, y, &mut model);
 }
